@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gold Price</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="treynoor-monogram-gold.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;600&family=Inter:wght@400;600&family=Outfit:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Treynoor theme (Night) — tokens from Treynoor-Design-Tokens.json.
+     Webpage by default. OBS overlay: ?obs=1 (transparent); ?obs=1&bg=1 keeps the panel. ?scale=1.5 resizes. */
+  :root {
+    --scale: 1;
+    --gold-500: #E4C063; --gold-300: #EBC676; --gold-700: #C39F4F; --gold-ink: #E4C063;
+    --surface: #12110E; --surface-raised: #1E1C17; --ink: #F4EEE1; --ink-muted: #B3AA98; --line: #3A352B; --on-gold: #16140F;
+    --accent: var(--gold-500);
+    --up: var(--gold-300); --down: var(--ink-muted);            /* brand: no red/green pairs; arrows carry direction */
+    --font-display: "Outfit", "Montserrat", system-ui, sans-serif;
+    --font-sans: "Inter", system-ui, sans-serif;
+    --font-ar-display: "Alexandria", "Readex Pro", "Noto Kufi Arabic", sans-serif;
+    --font-ar: "IBM Plex Sans Arabic", "Noto Sans Arabic", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: var(--font-sans); background: var(--surface); color: var(--ink); min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 32px 16px; }
+  [dir="rtl"] body { font-family: var(--font-ar); }
+  html.obs, html.obs body { background: transparent; overflow: hidden; }
+  html.obs body { display: block; min-height: 0; padding: 0; }
+
+  #card {
+    position: relative; overflow: hidden;
+    width: min(calc(380px * var(--scale)), 100%);
+    padding: calc(26px * var(--scale)) calc(24px * var(--scale)) calc(20px * var(--scale));
+    background: transparent; border: 1px solid transparent; border-radius: 0;
+    color: var(--ink);
+    font-size: calc(16px * var(--scale));
+    opacity: 0; transform: translateY(12px);
+    transition: opacity .8s ease, transform .8s ease;
+  }
+  [dir="rtl"] #card { font-size: calc(17px * var(--scale)); }
+  #card.on { opacity: 1; transform: none; }
+  #card.panel { background: var(--surface-raised); border-color: var(--line); border-top-color: var(--gold-500); }
+  /* Motif: the monogram's rays and arcs, cropped off the top corner, low strength */
+  #card.panel::before { content: ""; position: absolute; top: -70px; inset-inline-end: -70px; width: 200px; height: 200px; pointer-events: none; opacity: .07;
+    background: radial-gradient(circle, var(--gold-500) 0 14px, transparent 15px 34px, var(--gold-500) 35px 36px, transparent 37px 56px, var(--gold-500) 57px 58px, transparent 59px 78px, var(--gold-500) 79px 80px, transparent 81px); }
+  #card > * { position: relative; }
+
+  .brand { display: flex; justify-content: center; align-items: center; gap: 10px; height: calc(30px * var(--scale)); }
+  .brand > span { display: flex; align-items: center; gap: 10px; height: 100%; }
+  .brand img { display: block; height: 100%; width: auto; }
+  .brand .ar { display: none; }
+  [dir="rtl"] .brand .en { display: none; }
+  [dir="rtl"] .brand .ar { display: flex; }
+  .brand .ar img.wm { height: 130%; }
+
+  .head { display: flex; justify-content: center; margin-top: 1.1em; padding-top: .9em; border-top: 1px solid var(--line); }
+  .title { font-size: .75em; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--gold-ink); }
+  [dir="rtl"] .title { letter-spacing: 0; text-transform: none; font-size: .82em; }   /* never letter-space Arabic */
+  .unit { text-align: center; font-size: .82em; color: var(--ink-muted); margin-top: .2em; }
+
+  .row { display: flex; justify-content: center; align-items: baseline; margin-top: .3em; font-variant-numeric: tabular-nums; }
+  .row .val { font-family: var(--font-display); font-size: 3em; font-weight: 500; line-height: 1.1; letter-spacing: .01em; transition: opacity .4s ease; }
+  .val.out { opacity: 0; }
+  .tog-row { display: flex; justify-content: center; gap: .6em; margin-top: .8em; }
+  #card.old #time::after { content: " • " attr(data-stale); color: var(--gold-700); }
+  .chart { direction: ltr; }
+  .wk-stats { flex-wrap: wrap; gap: .15em .8em; }
+  .wk-stats > span { white-space: nowrap; }
+  .rs { display: inline-block; width: .82em; height: .9em; fill: currentColor; vertical-align: -.08em; margin-inline-end: .14em; }
+  .amt { white-space: nowrap; }
+  .ds { margin-inline-end: .06em; }
+  [dir="rtl"] .wk-note, [dir="rtl"] .unit { line-height: 1.6; }
+
+  .foot { display: flex; justify-content: space-between; align-items: baseline; font-size: .95em; color: var(--ink-muted); border-top: 1px solid var(--line); padding-top: .6em; margin-top: .7em; font-variant-numeric: tabular-nums; }
+  #chg.up, #wk-chg.up { color: var(--up); }
+  #chg.down, #wk-chg.down { color: var(--down); }
+
+  .bars { width: 100%; border-collapse: collapse; margin-top: 1.1em; font-size: .95em; font-variant-numeric: tabular-nums; transition: opacity .4s ease; }
+  .bars.out { opacity: 0; }
+  .bars caption { text-align: start; padding-bottom: .5em; }
+  .bars caption span { font-size: .8em; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--gold-ink); }
+  [dir="rtl"] .bars caption span { letter-spacing: 0; text-transform: none; font-size: .88em; }
+  .bars caption small { color: var(--ink-muted); font-weight: 400; font-size: .78em; margin-inline-start: .6em; }
+  .bars th { color: var(--ink-muted); font-weight: 400; font-size: .82em; text-align: end; padding: .2em 0 .35em; border-bottom: 1px solid var(--line); }
+  .bars th:first-child, .bars td:first-child { text-align: start; }
+  .bars td { text-align: end; padding: .45em 0; color: var(--ink); }
+  .bars td:first-child { color: var(--ink); font-weight: 600; }
+  .bars tr + tr td { border-top: 1px solid var(--line); }
+  .bars td + td, .bars th + th { padding-inline-start: .8em; }
+
+  .wk { margin-top: 1.2em; border-top: 1px solid var(--line); padding-top: .9em; }
+  .wk-head { display: flex; justify-content: space-between; align-items: center; }
+  .wk-title { font-size: .8em; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--gold-ink); }
+  [dir="rtl"] .wk-title { letter-spacing: 0; text-transform: none; font-size: .88em; }
+  .tog { display: inline-flex; border: 1px solid var(--line); border-radius: 2px; padding: 2px; }
+  .tog button { font: inherit; font-size: .78em; font-weight: 600; color: var(--ink-muted); background: none; border: 0; border-radius: 2px; padding: .25em .85em; cursor: pointer; }
+  .tog button:hover { color: var(--ink); }
+  .tog button.on { background: var(--gold-500); color: var(--on-gold); }
+  .tog button.on:hover { background: var(--gold-300); }
+  .tog button:focus-visible, .rng button:focus-visible { outline: 1px solid var(--gold-500); outline-offset: 2px; }
+  .wk-stats { display: flex; justify-content: space-between; align-items: baseline; margin-top: .55em; font-size: .92em; color: var(--ink); font-variant-numeric: tabular-nums; }
+  #wk-hl { color: var(--ink-muted); font-size: .92em; }
+  .chart { position: relative; margin-top: .5em; height: calc(190px * var(--scale)); touch-action: pan-y; }
+  #wk-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .chart .grid { stroke: var(--line); stroke-width: 1; }
+  .chart .ylab, .chart .xlab { fill: var(--ink-muted); font-size: 11px; font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+  [dir="rtl"] .chart .xlab { font-family: var(--font-ar); }
+  .chart .line { fill: none; stroke: var(--gold-500); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart .cross { stroke: var(--ink-muted); stroke-width: 1; stroke-dasharray: 2 3; }
+  .chart .dot { fill: var(--gold-500); stroke: var(--surface-raised); stroke-width: 2; }
+  .tip { position: absolute; top: 0; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 0; padding: .35em .6em; font-size: .8em; white-space: nowrap; color: var(--ink); opacity: 0; transition: opacity .15s; font-variant-numeric: tabular-nums; }
+  .tip small { display: block; color: var(--ink-muted); }
+  .wk-note { margin-top: .5em; font-size: .72em; color: var(--ink-muted); }
+  #wk-body { transition: opacity .3s ease; }
+  #wk-body.out { opacity: 0; }
+  .rng { display: inline-flex; gap: 2px; }
+  .rng button { font: inherit; font-size: .74em; font-weight: 600; color: var(--ink-muted); background: none; border: 1px solid transparent; border-radius: 2px; padding: .1em .5em; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .rng button:hover { color: var(--ink); }
+  .rng button.on { color: var(--gold-ink); border-color: var(--gold-500); }
+  html.obs .tog-row { display: none; }
+</style>
+</head>
+<body>
+
+<!-- New Saudi Riyal sign (glyph from @emran-alhaddad/saudi-riyal-font, SIL Open Font License 1.1) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="riyal-sign" viewBox="40 0 1150 1270"><path d="M750,1119C730,1163,716,1211,711,1262L1136,1172C1156,1127,1169,1079,1174,1028L750,1119Z M1136,901C1156,857,1169,809,1174,758L843,828L843,693L1136,631C1156,587,1169,538,1174,488L843,558L843,72C793,100,748,138,711,183L711,586L579,614L579,6C528,34,483,72,447,117L447,642L151,705C131,750,117,798,112,849L447,777L447,948L88,1024C68,1068,55,1117,50,1167L425,1088C456,1081,482,1063,499,1038L568,936C575,926,579,913,579,899L579,749L711,721L711,992L1136,901Z"/></symbol>
+</defs></svg>
+
+<div id="card">
+  <div class="brand">
+    <span class="en"><img src="treynoor-logo-horizontal-gold.svg" alt="Treynoor"></span>
+    <span class="ar"><img src="treynoor-monogram-gold.svg" alt=""><img class="wm" src="treynoor-wordmark-ar.svg" alt="ترينور"></span>
+  </div>
+  <div class="head"><div class="title" data-i18n="title">Gold</div></div>
+  <div class="unit" data-i18n="unit">Spot price · per troy ounce</div>
+  <div class="tog-row">
+    <div class="tog" role="group" aria-label="Currency"><button type="button" data-cur="USD">USD</button><button type="button" data-cur="SAR">SAR</button></div>
+    <div class="tog" role="group" aria-label="Language"><button type="button" data-lang="en">EN</button><button type="button" data-lang="ar" lang="ar">ع</button></div>
+  </div>
+  <div class="row"><span class="val" id="price">--</span></div>
+  <div class="foot"><span id="chg" dir="ltr">—</span><span id="time" data-i18n="loading">Loading…</span></div>
+  <table class="bars" id="bars">
+    <caption><span data-i18n="bullion">Bullion</span><small data-i18n="bullionNote">24K spot value, no premium</small></caption>
+    <thead><tr><th data-i18n="size">Size</th><th data-i18n="priceCol">Price</th></tr></thead>
+    <tbody id="bars-body"></tbody>
+  </table>
+  <div class="wk">
+    <div class="wk-head">
+      <span class="wk-title" id="wk-title">Past 7 days</span>
+      <div class="rng" role="group" aria-label="Chart range"><button type="button">7D</button><button type="button">30D</button><button type="button">1Y</button></div>
+    </div>
+    <div id="wk-body">
+      <div class="wk-stats"><span id="wk-chg" dir="ltr">—</span><span id="wk-hl"></span></div>
+      <div class="chart" id="chart"><svg id="wk-svg" role="img" aria-label="Gold price chart"></svg><div class="tip" id="tip"></div></div>
+    </div>
+    <div class="wk-note" data-i18n="note">Hourly · PAX Gold (PAXG), a token backed by 1 oz of gold — tracks spot closely</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // Optional URL params: ?obs=1 (transparent overlay), &bg=1 (panel in overlay), ?scale=1.5, ?accent=%23c8102e
+  const q = new URLSearchParams(location.search);
+  const obs = q.get('obs') === '1';
+  if (obs) document.documentElement.classList.add('obs');
+  if (q.get('scale')) document.documentElement.style.setProperty('--scale', q.get('scale'));
+  if (!obs || q.get('bg') === '1') document.getElementById('card').classList.add('panel');
+  if (q.get('accent')) document.documentElement.style.setProperty('--accent', q.get('accent'));
+
+  const GOLD_URL = 'https://api.gold-api.com/price/XAU';      // USD per troy ounce, no key
+  const REFRESH_MS = 5 * 60 * 1000;                            // gold: every 5 minutes
+  const SAR_RATE = 3.76;                                        // fixed: 1 USD = 3.76 SAR
+  const GOLD_KEY = 'gold-widget-price-v1';
+  const GRAMS_PER_OZ = 31.1034768;                              // troy ounce
+  const BARS = [['1 g', 1], ['1 oz', GRAMS_PER_OZ], ['1 kg', 1000]];
+  const $ = id => document.getElementById(id);
+
+  // One currency for the whole page. Default SAR; ?cur=USD|SAR wins, else the viewer's last choice.
+  const CUR_KEY = 'gold-widget-cur';
+  let cur = 'SAR';
+  const qc = (q.get('cur') || '').toUpperCase();
+  if (qc === 'USD' || qc === 'SAR') cur = qc;
+  else { try { if (localStorage.getItem(CUR_KEY) === 'USD') cur = 'USD'; } catch (e) {} }
+  const conv = v => cur === 'SAR' ? v * SAR_RATE : v;
+
+  // Language: English (default) or Arabic (right-to-left, Western digits). ?lang=ar|en wins, else last choice.
+  const LANG_KEY = 'gold-widget-lang';
+  const T = {
+    en: { title: 'Gold', unit: 'Spot price · per troy ounce · 999.9 fine', loading: 'Loading…', bullion: 'Bullion', bullionNote: '999.9 fine · spot value, no premium',
+          size: 'Size', priceCol: 'Price', note: 'PAX Gold (PAXG), a token backed by 1 oz of gold — tracks spot closely',
+          rngTitle: ['Past 7 days', 'Past 30 days', 'Past year'], rngShort: ['7D', '30D', '1Y'],
+          USD: 'USD', SAR: 'SAR', hi: 'H', lo: 'L', stale: 'stale', noPrice: 'Price unavailable', noChart: 'Chart unavailable',
+          sizes: ['1 g', '1 oz (31.10 g)', '1 kg'], locale: 'en-GB' },
+    ar: { title: 'الذهب', unit: 'السعر الفوري · للأونصة · نقاوة 999.9', loading: 'جارٍ التحميل…', bullion: 'السبائك', bullionNote: 'نقاوة 999.9 · قيمة فورية، بدون رسوم',
+          size: 'الوزن', priceCol: 'السعر', note: 'PAX Gold (PAXG)، رمز مغطّى بأونصة ذهب — يتبع السعر الفوري عن قرب',
+          rngTitle: ['آخر 7 أيام', 'آخر 30 يوماً', 'آخر سنة'], rngShort: ['7 أيام', '30 يوماً', 'سنة'],
+          USD: 'دولار', SAR: 'ريال', hi: 'أعلى', lo: 'أدنى', stale: 'غير محدّث', noPrice: 'السعر غير متاح', noChart: 'الرسم غير متاح',
+          sizes: ['1 غرام', '1 أونصة (31.10 غرام)', '1 كيلو'], locale: 'ar-u-nu-latn-ca-gregory' },
+  };
+  let lang = 'en';
+  const ql = (q.get('lang') || '').toLowerCase();
+  if (ql === 'ar' || ql === 'en') lang = ql;
+  else { try { if (localStorage.getItem(LANG_KEY) === 'ar') lang = 'ar'; } catch (e) {} }
+  const t = k => T[lang][k];
+  function applyLang() {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.title = lang === 'ar' ? 'سعر الذهب' : 'Gold Price';
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      if (el.id === 'time' && el.dataset.filled) return;   // time is filled by render
+      el.textContent = t(el.dataset.i18n);
+    });
+    $('time').dataset.stale = t('stale');
+  }
+  applyLang();
+
+  // Memory copy first, so change/stale still work where browser storage is blocked.
+  const mem = {};
+  const load = k => { if (mem[k]) return mem[k]; try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+  const save = (k, v) => { mem[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  const money = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Amount as HTML: the currency sign (new Saudi Riyal sign or $) sits right before the number, kept left-to-right.
+  const RIYAL = '<svg class="rs" aria-label="SAR" role="img"><use href="#riyal-sign"/></svg>';
+  const amt = n => `<bdi dir="ltr" class="amt">${cur === 'SAR' ? RIYAL : '<span class="ds">$</span>'}${money(n)}</bdi>`;
+  const clock = ts => new Date(ts).toLocaleString(t('locale'), { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
+
+  async function fetchJson(url) {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }
+
+  // Show the price in the selected currency, change since the previous refresh, and time of the price.
+  // SAR = unrounded USD x 3.76; every value is rounded to 2 decimals only when displayed.
+  let lastShown = null;
+  function render(p, stale) {
+    lastShown = [p, stale];
+    const price = $('price'), bars = $('bars');
+    price.classList.add('out'); bars.classList.add('out');
+    setTimeout(() => {
+      price.innerHTML = amt(conv(p.usd));
+      // Bullion table: grams x (spot / grams per ounce).
+      const perGram = p.usd / GRAMS_PER_OZ, sizes = t('sizes');
+      $('bars-body').innerHTML = BARS.map(([, g], i) =>
+        `<tr><td>${sizes[i]}</td><td>${amt(conv(g * perGram))}</td></tr>`).join('');
+      price.classList.remove('out'); bars.classList.remove('out');
+    }, 400);
+    const chg = $('chg');
+    chg.className = '';
+    if (p.prev != null && p.prev > 0) {
+      const d = p.usd - p.prev, pct = d / p.prev * 100;
+      const sign = d > 0 ? '▲ +' : d < 0 ? '▼ −' : '';
+      chg.innerHTML = d === 0 ? `${amt(0)} (0.00%)` : `${sign}${amt(Math.abs(conv(d)))} (${Math.abs(pct).toFixed(2)}%)`;
+      if (d > 0) chg.classList.add('up'); else if (d < 0) chg.classList.add('down');
+    } else {
+      chg.textContent = '—';
+    }
+    $('time').textContent = clock(p.at);
+    $('time').dataset.filled = '1';
+    $('card').classList.toggle('old', !!stale);
+    $('card').classList.add('on');
+  }
+
+  async function update() {
+    const last = load(GOLD_KEY);
+    try {
+      // Step 1: spot gold in USD per ounce.
+      const g = await fetchJson(GOLD_URL);
+      if (typeof g.price !== 'number' || !(g.price > 0)) throw new Error('bad price');
+      const at = g.updatedAt ? Date.parse(g.updatedAt) : Date.now();
+      // Keep the previous comparison point when the source hasn't moved to a new quote yet.
+      const prev = last ? (last.at === at ? last.prev : last.usd) : null;
+      const p = { usd: g.price, at, prev };
+      save(GOLD_KEY, p);
+      render(p, false);
+    } catch (e) {
+      // Step 4: keep the last known price on screen and mark it stale.
+      if (last) render(last, true);
+      else $('time').textContent = t('noPrice');
+      $('card').classList.add('on');
+    }
+  }
+
+  // ---- History chart: PAXG candles from Binance (free, no key), rotating 7 days -> 30 days -> 1 year ----
+  const KLINES = 'https://api.binance.com/api/v3/klines?symbol=PAXGUSDT';
+  const MIN = 60 * 1000, RIYADH_OFFSET = 3 * 60 * MIN;          // Riyadh is UTC+3 all year
+  const RANGES = [
+    { id: '7d',  q: '&interval=1h&limit=168', maxAge: 5 * MIN,  tick: 'day'   },   // hourly
+    { id: '30d', q: '&interval=4h&limit=180', maxAge: 30 * MIN, tick: 'week'  },   // every 4 hours
+    { id: '1y',  q: '&interval=1d&limit=365', maxAge: 30 * MIN, tick: 'month' },   // daily
+  ];
+  const ROTATE_MS = 10 * 1000;
+  const data = {};
+  RANGES.forEach(r => { data[r.id] = load('gold-widget-range-' + r.id + '-v1'); });
+  let ri = 0, paused = false;
+
+  const fmt = (ts, o) => new Date(ts).toLocaleString(t('locale'), Object.assign({ timeZone: 'Asia/Riyadh' }, o));
+  const dayNum = ts => Math.floor((ts + RIYADH_OFFSET) / 86400000);
+  // Tick key per point: a new tick starts where the key changes.
+  const tickKey = { day: ts => dayNum(ts), week: ts => Math.floor((dayNum(ts) + 4) / 7),   // weeks start Sunday
+                    month: ts => fmt(ts, { year: 'numeric', month: 'numeric' }) };
+  const tickLabel = { day: ts => fmt(ts, { weekday: 'short' }), week: ts => fmt(ts, { day: 'numeric', month: 'short' }),
+                      month: ts => fmt(ts, { month: 'long' }) };
+  const tipFmt = { '7d': { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
+                   '30d': { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
+                   '1y': { day: 'numeric', month: 'short', year: 'numeric' } };
+
+  async function loadRange(r, force) {
+    const cached = data[r.id];
+    if (!force && cached && Date.now() - cached.at < r.maxAge) return;
+    try {
+      const k = await fetchJson(KLINES + r.q);
+      if (!Array.isArray(k) || k.length < 2) throw new Error('no data');
+      // [openTime, open, high, low, close, volume, closeTime, ...]
+      const w = { t: k.map(x => x[6] + 1), c: k.map(x => +x[4]), open: +k[0][1],
+                  hi: Math.max(...k.map(x => +x[2])), lo: Math.min(...k.map(x => +x[3])), at: Date.now() };
+      if (w.c.some(v => !(v > 0))) throw new Error('bad data');
+      data[r.id] = w; save('gold-widget-range-' + r.id + '-v1', w);
+    } catch (e) { /* keep the last data for this range */ }
+  }
+  async function loadRanges(force) {
+    await Promise.all(RANGES.map(r => loadRange(r, force)));
+    drawChart();
+  }
+
+  // Range indicator: 7D · 30D · 1Y (tap to jump).
+  function markRange() {
+    document.querySelectorAll('.rng button').forEach((b, i) => {
+      b.textContent = t('rngShort')[i];
+      b.classList.toggle('on', i === ri);
+      b.setAttribute('aria-pressed', i === ri);
+    });
+    $('wk-title').textContent = t('rngTitle')[ri];
+  }
+  let rotTimer;
+  function showRange(i) {
+    const body = $('wk-body');
+    body.classList.add('out');
+    setTimeout(() => { ri = i; drawChart(); body.classList.remove('out'); }, 300);
+    clearInterval(rotTimer);
+    rotTimer = setInterval(() => { if (!paused) showRange((ri + 1) % RANGES.length); }, ROTATE_MS);
+  }
+  document.querySelectorAll('.rng button').forEach((b, i) => b.addEventListener('click', () => { if (i !== ri) showRange(i); }));
+
+  let pts = [];
+  function drawChart() {
+    markRange();
+    const svg = $('wk-svg'), r = RANGES[ri], week = data[r.id];
+    if (!week) { $('wk-chg').textContent = t('noChart'); $('wk-hl').textContent = ''; svg.innerHTML = ''; pts = []; return; }
+    const last = week.c[week.c.length - 1], d = last - week.open, pct = d / week.open * 100;
+    const chg = $('wk-chg');
+    chg.className = d > 0 ? 'up' : d < 0 ? 'down' : '';
+    chg.innerHTML = `${d > 0 ? '▲ +' : d < 0 ? '▼ −' : ''}${amt(Math.abs(conv(d)))} (${Math.abs(pct).toFixed(2)}%)`;
+    $('wk-hl').innerHTML = `${t('hi')} <bdi>${amt(conv(week.hi))}</bdi> · ${t('lo')} <bdi>${amt(conv(week.lo))}</bdi>`;
+
+    const W = svg.clientWidth || 320, H = svg.clientHeight || 150;
+    const vertical = r.tick === 'month';                 // year view: full month names, written vertically
+    const padR = 52, padB = vertical ? 62 : 18, padT = 6;
+    const vals = week.c.map(conv);
+    let min = Math.min(...vals), max = Math.max(...vals);
+    const span = (max - min) || max * .001; min -= span * .08; max += span * .08;
+    const n = vals.length, x = i => i / (n - 1) * (W - padR), y = v => padT + (1 - (v - min) / (max - min)) * (H - padT - padB);
+    pts = vals.map((v, i) => [x(i), y(v), v, week.t[i]]);
+    const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('');
+    const base = H - padB;
+
+    let grid = '';
+    [max - (max - min) * .08 / 1.16, (max + min) / 2, min + (max - min) * .08 / 1.16].forEach(v => {
+      const yy = y(v).toFixed(1);
+      grid += `<line class="grid" x1="0" x2="${W - padR}" y1="${yy}" y2="${yy}"/><text class="ylab" x="${W - padR + 6}" y="${(+yy + 4).toFixed(1)}">${Math.round(v).toLocaleString('en-US')}</text>`;
+    });
+    let xl = '', lastLab = -1e9;
+    const key = tickKey[r.tick], label = tickLabel[r.tick];
+    const minGap = vertical ? 12 : lang === 'ar' ? 40 : 30;   // skip labels that would collide
+    for (let i = 1; i < n; i++) {
+      if (key(week.t[i]) !== key(week.t[i - 1])) {
+        const xx = x(i).toFixed(1);
+        xl += `<line class="grid" x1="${xx}" x2="${xx}" y1="${padT}" y2="${base}"/>`;
+        if (x(i) - lastLab >= minGap && x(i) < W - padR - (vertical ? 8 : 14)) {
+          xl += vertical
+            ? `<text class="xlab" text-anchor="end" transform="translate(${(x(i) + 12).toFixed(1)} ${base + 5}) rotate(-90)">${label(week.t[i])}</text>`
+            : `<text class="xlab" x="${(x(i) + 3).toFixed(1)}" y="${H - 4}">${label(week.t[i])}</text>`;
+          lastLab = x(i);
+        }
+      }
+    }
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.innerHTML =
+      grid + xl +
+      `<path d="${line}L${pts[n - 1][0].toFixed(1)} ${base}L0 ${base}Z" fill="var(--gold-500)" fill-opacity=".08"/>` +
+      `<path class="line" d="${line}"/>` +
+      `<line class="cross" id="wk-cross" y1="${padT}" y2="${base}" visibility="hidden"/>` +
+      `<circle class="dot" id="wk-dot" r="4.5" cx="${pts[n - 1][0]}" cy="${pts[n - 1][1]}"/>`;
+  }
+
+  // Crosshair + tooltip on hover/touch.
+  const chartEl = $('chart'), tip = $('tip');
+  function hover(ev) {
+    if (!pts.length) return;
+    const r = chartEl.getBoundingClientRect(), mx = ev.clientX - r.left;
+    let i = Math.round(mx / pts[pts.length - 1][0] * (pts.length - 1));
+    i = Math.max(0, Math.min(pts.length - 1, i));
+    const [px, py, v, ts] = pts[i];
+    const cross = $('wk-cross'), dot = $('wk-dot');
+    cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
+    dot.setAttribute('cx', px); dot.setAttribute('cy', py);
+    tip.innerHTML = `<span>${amt(v)}</span><small dir="auto">${fmt(ts, tipFmt[RANGES[ri].id])}</small>`;
+    const tw = tip.offsetWidth;
+    tip.style.left = Math.max(0, Math.min(r.width - tw, px - tw / 2)) + 'px';
+    tip.style.top = (py > 50 ? py - 46 : py + 12) + 'px';
+    tip.style.opacity = 1;
+  }
+  function unhover() {
+    tip.style.opacity = 0;
+    if (!pts.length) return;
+    const last = pts[pts.length - 1];
+    $('wk-cross').setAttribute('visibility', 'hidden');
+    $('wk-dot').setAttribute('cx', last[0]); $('wk-dot').setAttribute('cy', last[1]);
+  }
+  chartEl.addEventListener('pointermove', hover);
+  chartEl.addEventListener('pointerdown', e => { paused = true; hover(e); });
+  chartEl.addEventListener('pointerenter', () => { paused = true; });
+  chartEl.addEventListener('pointerleave', () => { paused = false; unhover(); });
+
+  // USD | SAR switch for the whole page (remembered per viewer).
+  function wireSwitch(attr, get, set, key) {
+    const btns = document.querySelectorAll(`.tog button[data-${attr}]`);
+    const mark = () => btns.forEach(o => { const on = o.dataset[attr] === get(); o.classList.toggle('on', on); o.setAttribute('aria-pressed', on); });
+    mark();
+    btns.forEach(b => b.addEventListener('click', () => {
+      if (get() === b.dataset[attr]) return;
+      set(b.dataset[attr]);
+      try { localStorage.setItem(key, get()); } catch (e) {}
+      mark();
+      applyLang();
+      if (lastShown) render(...lastShown);
+      drawChart();
+    }));
+  }
+  wireSwitch('cur', () => cur, v => { cur = v; }, CUR_KEY);
+  wireSwitch('lang', () => lang, v => { lang = v; }, LANG_KEY);
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawChart, 150); });
+
+  update(); drawChart(); loadRanges(true);
+  showRange(0);
+  // Every 5 min: spot price; each chart range refreshes only once its data is older than its maxAge.
+  setInterval(() => { update(); loadRanges(false); }, REFRESH_MS);
+})();
+</script>
+</body>
+</html>
