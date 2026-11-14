@@ -36,13 +36,18 @@
   .row { display: flex; justify-content: space-between; align-items: baseline; margin-top: .45em; font-variant-numeric: tabular-nums; }
   .row .cur { font-size: 1.3em; color: #dde3ea; font-weight: 600; }
   .row .val { font-size: 3em; font-weight: 600; line-height: 1.05; transition: opacity .4s ease; }
-  .tog-row { display: flex; justify-content: center; margin-top: .55em; }
+  .tog-row { display: flex; justify-content: center; gap: .6em; margin-top: .55em; }
+  #card.old #time::after { content: " • " attr(data-stale); }
+  .chart { direction: ltr; }
+  .wk-stats { flex-wrap: wrap; gap: .15em .8em; }
+  .wk-stats > span { white-space: nowrap; }
+  [dir="rtl"] .wk-note, [dir="rtl"] .unit { line-height: 1.5; }
   .val.out { opacity: 0; }
 
   .foot { display: flex; justify-content: space-between; align-items: baseline; font-size: 1.2em; color: #dde3ea; border-top: 1px solid rgba(255,255,255,.16); padding-top: .5em; margin-top: .5em; font-variant-numeric: tabular-nums; }
   #chg.up { color: var(--up); }
   #chg.down { color: var(--down); }
-  #card.old #time::after { content: " • stale"; color: #E8A33D; }
+  #card.old #time::after { color: #E8A33D; }
 
   .bars { width: 100%; border-collapse: collapse; margin-top: .7em; font-size: 1.05em; font-variant-numeric: tabular-nums; transition: opacity .4s ease; }
   .bars.out { opacity: 0; }
@@ -84,20 +89,23 @@
 
 <div id="card">
   <div class="head"><div class="title">Gold<span>الذهب</span></div></div>
-  <div class="unit">Spot price · per troy ounce</div>
-  <div class="tog-row"><div class="tog" role="group" aria-label="Currency"><button type="button" data-cur="USD">USD</button><button type="button" data-cur="SAR">SAR</button></div></div>
+  <div class="unit" data-i18n="unit">Spot price · per troy ounce</div>
+  <div class="tog-row">
+    <div class="tog" role="group" aria-label="Currency"><button type="button" data-cur="USD">USD</button><button type="button" data-cur="SAR">SAR</button></div>
+    <div class="tog" role="group" aria-label="Language"><button type="button" data-lang="en">EN</button><button type="button" data-lang="ar" lang="ar">ع</button></div>
+  </div>
   <div class="row"><span class="cur" id="cur-l">SAR</span><span class="val" id="price">--</span></div>
-  <div class="foot"><span id="chg">—</span><span id="time">Loading…</span></div>
+  <div class="foot"><span id="chg" dir="ltr">—</span><span id="time" data-i18n="loading">Loading…</span></div>
   <table class="bars" id="bars">
-    <caption>Bullion<small>24K spot value, no premium</small></caption>
-    <thead><tr><th>Size</th><th id="bars-cur">SAR</th></tr></thead>
+    <caption><span data-i18n="bullion">Bullion</span><small data-i18n="bullionNote">24K spot value, no premium</small></caption>
+    <thead><tr><th data-i18n="size">Size</th><th id="bars-cur">SAR</th></tr></thead>
     <tbody id="bars-body"></tbody>
   </table>
   <div class="wk">
-    <div class="wk-head"><span class="wk-title">Past 7 days</span></div>
-    <div class="wk-stats"><span id="wk-chg">—</span><span id="wk-hl"></span></div>
+    <div class="wk-head"><span class="wk-title" data-i18n="week">Past 7 days</span></div>
+    <div class="wk-stats"><span id="wk-chg" dir="ltr">—</span><span id="wk-hl"></span></div>
     <div class="chart" id="chart"><svg id="wk-svg" role="img" aria-label="Gold price, past 7 days"></svg><div class="tip" id="tip"></div></div>
-    <div class="wk-note">Hourly · PAX Gold (PAXG), a token backed by 1 oz of gold — tracks spot closely</div>
+    <div class="wk-note" data-i18n="note">Hourly · PAX Gold (PAXG), a token backed by 1 oz of gold — tracks spot closely</div>
   </div>
 </div>
 
@@ -127,12 +135,40 @@
   else { try { if (localStorage.getItem(CUR_KEY) === 'USD') cur = 'USD'; } catch (e) {} }
   const conv = v => cur === 'SAR' ? v * SAR_RATE : v;
 
+  // Language: English (default) or Arabic (right-to-left, Western digits). ?lang=ar|en wins, else last choice.
+  const LANG_KEY = 'gold-widget-lang';
+  const T = {
+    en: { unit: 'Spot price · per troy ounce', loading: 'Loading…', bullion: 'Bullion', bullionNote: '24K spot value, no premium',
+          size: 'Size', week: 'Past 7 days', note: 'Hourly · PAX Gold (PAXG), a token backed by 1 oz of gold — tracks spot closely',
+          USD: 'USD', SAR: 'SAR', hi: 'H', lo: 'L', stale: 'stale', noPrice: 'Price unavailable', noChart: 'Chart unavailable',
+          sizes: ['1 g', '2.5 g', '5 g', '1 oz', '100 g', '1 kg'], locale: 'en-GB' },
+    ar: { unit: 'السعر الفوري · للأونصة', loading: 'جارٍ التحميل…', bullion: 'السبائك', bullionNote: 'قيمة فورية عيار 24، بدون رسوم',
+          size: 'الوزن', week: 'آخر 7 أيام', note: 'كل ساعة · PAX Gold (PAXG)، رمز مغطّى بأونصة ذهب — يتبع السعر الفوري عن قرب',
+          USD: 'دولار', SAR: 'ريال', hi: 'أعلى', lo: 'أدنى', stale: 'غير محدّث', noPrice: 'السعر غير متاح', noChart: 'الرسم غير متاح',
+          sizes: ['1 غرام', '2.5 غرام', '5 غرام', '1 أونصة', '100 غرام', '1 كيلو'], locale: 'ar-u-nu-latn-ca-gregory' },
+  };
+  let lang = 'en';
+  const ql = (q.get('lang') || '').toLowerCase();
+  if (ql === 'ar' || ql === 'en') lang = ql;
+  else { try { if (localStorage.getItem(LANG_KEY) === 'ar') lang = 'ar'; } catch (e) {} }
+  const t = k => T[lang][k];
+  function applyLang() {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      if (el.id === 'time' && el.dataset.filled) return;   // time is filled by render
+      el.textContent = t(el.dataset.i18n);
+    });
+    $('time').dataset.stale = t('stale');
+  }
+  applyLang();
+
   // Memory copy first, so change/stale still work where browser storage is blocked.
   const mem = {};
   const load = k => { if (mem[k]) return mem[k]; try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
   const save = (k, v) => { mem[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
   const money = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const clock = t => new Date(t).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
+  const clock = ts => new Date(ts).toLocaleString(t('locale'), { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
 
   async function fetchJson(url) {
     const r = await fetch(url, { cache: 'no-store' });
@@ -148,13 +184,13 @@
     const price = $('price'), bars = $('bars');
     price.classList.add('out'); bars.classList.add('out');
     setTimeout(() => {
-      $('cur-l').textContent = cur;
-      $('bars-cur').textContent = cur;
+      $('cur-l').textContent = t(cur);
+      $('bars-cur').textContent = t(cur);
       price.textContent = money(conv(p.usd));
       // Bullion table: grams x (spot / grams per ounce).
-      const perGram = p.usd / GRAMS_PER_OZ;
-      $('bars-body').innerHTML = BARS.map(([label, g]) =>
-        `<tr><td>${label}</td><td>${money(conv(g * perGram))}</td></tr>`).join('');
+      const perGram = p.usd / GRAMS_PER_OZ, sizes = t('sizes');
+      $('bars-body').innerHTML = BARS.map(([, g], i) =>
+        `<tr><td>${sizes[i]}</td><td>${money(conv(g * perGram))}</td></tr>`).join('');
       price.classList.remove('out'); bars.classList.remove('out');
     }, 400);
     const chg = $('chg');
@@ -168,6 +204,7 @@
       chg.textContent = '—';
     }
     $('time').textContent = clock(p.at);
+    $('time').dataset.filled = '1';
     $('card').classList.toggle('old', !!stale);
     $('card').classList.add('on');
   }
@@ -187,7 +224,7 @@
     } catch (e) {
       // Step 4: keep the last known price on screen and mark it stale.
       if (last) render(last, true);
-      else $('time').textContent = 'Price unavailable';
+      else $('time').textContent = t('noPrice');
       $('card').classList.add('on');
     }
   }
@@ -196,9 +233,9 @@
   const WEEK_URL = 'https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=1h&limit=168';
   const WEEK_KEY = 'gold-widget-week-v1';
   let week = load(WEEK_KEY);
-  const dayName = t => new Date(t).toLocaleDateString('en-GB', { timeZone: 'Asia/Riyadh', weekday: 'short' });
-  const riyadhHour = t => +new Date(t).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', hour12: false });
-  const tipTime = t => new Date(t).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const dayName = ts => new Date(ts).toLocaleDateString(t('locale'), { timeZone: 'Asia/Riyadh', weekday: 'short' });
+  const riyadhHour = ts => +new Date(ts).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', hour12: false });
+  const tipTime = ts => new Date(ts).toLocaleString(t('locale'), { timeZone: 'Asia/Riyadh', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
   async function loadWeek() {
     try {
@@ -216,12 +253,12 @@
   let pts = [];
   function drawWeek() {
     const svg = $('wk-svg');
-    if (!week) { $('wk-chg').textContent = 'Chart unavailable'; svg.innerHTML = ''; return; }
+    if (!week) { $('wk-chg').textContent = t('noChart'); svg.innerHTML = ''; return; }
     const last = week.c[week.c.length - 1], d = last - week.open, pct = d / week.open * 100;
     const chg = $('wk-chg');
     chg.className = d > 0 ? 'up' : d < 0 ? 'down' : '';
     chg.textContent = `${d > 0 ? '▲ +' : d < 0 ? '▼ −' : ''}${money(Math.abs(conv(d)))} (${Math.abs(pct).toFixed(2)}%)`;
-    $('wk-hl').textContent = `H ${money(conv(week.hi))} · L ${money(conv(week.lo))}`;
+    $('wk-hl').innerHTML = `${t('hi')} <bdi>${money(conv(week.hi))}</bdi> · ${t('lo')} <bdi>${money(conv(week.lo))}</bdi>`;
 
     const W = svg.clientWidth || 320, H = svg.clientHeight || 150;
     const padR = 52, padB = 18, padT = 6;
@@ -263,11 +300,11 @@
     const r = chartEl.getBoundingClientRect(), mx = ev.clientX - r.left;
     let i = Math.round(mx / pts[pts.length - 1][0] * (pts.length - 1));
     i = Math.max(0, Math.min(pts.length - 1, i));
-    const [px, py, v, t] = pts[i];
+    const [px, py, v, ts] = pts[i];
     const cross = $('wk-cross'), dot = $('wk-dot');
     cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
     dot.setAttribute('cx', px); dot.setAttribute('cy', py);
-    tip.innerHTML = `${cur} ${money(v)}<small>${tipTime(t)}</small>`;
+    tip.innerHTML = `<span dir="auto">${t(cur)} <bdi>${money(v)}</bdi></span><small dir="auto">${tipTime(ts)}</small>`;
     const tw = tip.offsetWidth;
     tip.style.left = Math.max(0, Math.min(r.width - tw, px - tw / 2)) + 'px';
     tip.style.top = (py > 50 ? py - 46 : py + 12) + 'px';
@@ -285,18 +322,22 @@
   chartEl.addEventListener('pointerleave', unhover);
 
   // USD | SAR switch for the whole page (remembered per viewer).
-  document.querySelectorAll('.tog button').forEach(b => {
-    b.classList.toggle('on', b.dataset.cur === cur);
-    b.setAttribute('aria-pressed', b.dataset.cur === cur);
-    b.addEventListener('click', () => {
-      if (cur === b.dataset.cur) return;
-      cur = b.dataset.cur;
-      try { localStorage.setItem(CUR_KEY, cur); } catch (e) {}
-      document.querySelectorAll('.tog button').forEach(o => { o.classList.toggle('on', o === b); o.setAttribute('aria-pressed', o === b); });
+  function wireSwitch(attr, get, set, key) {
+    const btns = document.querySelectorAll(`.tog button[data-${attr}]`);
+    const mark = () => btns.forEach(o => { const on = o.dataset[attr] === get(); o.classList.toggle('on', on); o.setAttribute('aria-pressed', on); });
+    mark();
+    btns.forEach(b => b.addEventListener('click', () => {
+      if (get() === b.dataset[attr]) return;
+      set(b.dataset[attr]);
+      try { localStorage.setItem(key, get()); } catch (e) {}
+      mark();
+      applyLang();
       if (lastShown) render(...lastShown);
       drawWeek();
-    });
-  });
+    }));
+  }
+  wireSwitch('cur', () => cur, v => { cur = v; }, CUR_KEY);
+  wireSwitch('lang', () => lang, v => { lang = v; }, LANG_KEY);
   let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawWeek, 150); });
 
   update(); loadWeek();
