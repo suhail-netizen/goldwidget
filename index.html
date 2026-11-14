@@ -124,7 +124,7 @@
   const SAR_RATE = 3.76;                                        // fixed: 1 USD = 3.76 SAR
   const GOLD_KEY = 'gold-widget-price-v1';
   const GRAMS_PER_OZ = 31.1034768;                              // troy ounce
-  const BARS = [['1 g', 1], ['2.5 g', 2.5], ['5 g', 5], ['1 oz', GRAMS_PER_OZ], ['100 g', 100], ['1 kg', 1000]];
+  const BARS = [['1 g', 1], ['1 oz', GRAMS_PER_OZ], ['1 kg', 1000]];
   const $ = id => document.getElementById(id);
 
   // One currency for the whole page. Default SAR; ?cur=USD|SAR wins, else the viewer's last choice.
@@ -141,11 +141,11 @@
     en: { unit: 'Spot price · per troy ounce', loading: 'Loading…', bullion: 'Bullion', bullionNote: '24K spot value, no premium',
           size: 'Size', week: 'Past 7 days', note: 'Hourly · PAX Gold (PAXG), a token backed by 1 oz of gold — tracks spot closely',
           USD: 'USD', SAR: 'SAR', hi: 'H', lo: 'L', stale: 'stale', noPrice: 'Price unavailable', noChart: 'Chart unavailable',
-          sizes: ['1 g', '2.5 g', '5 g', '1 oz', '100 g', '1 kg'], locale: 'en-GB' },
+          sizes: ['1 g', '1 oz (31.10 g)', '1 kg'], locale: 'en-GB' },
     ar: { unit: 'السعر الفوري · للأونصة', loading: 'جارٍ التحميل…', bullion: 'السبائك', bullionNote: 'قيمة فورية عيار 24، بدون رسوم',
           size: 'الوزن', week: 'آخر 7 أيام', note: 'كل ساعة · PAX Gold (PAXG)، رمز مغطّى بأونصة ذهب — يتبع السعر الفوري عن قرب',
           USD: 'دولار', SAR: 'ريال', hi: 'أعلى', lo: 'أدنى', stale: 'غير محدّث', noPrice: 'السعر غير متاح', noChart: 'الرسم غير متاح',
-          sizes: ['1 غرام', '2.5 غرام', '5 غرام', '1 أونصة', '100 غرام', '1 كيلو'], locale: 'ar-u-nu-latn-ca-gregory' },
+          sizes: ['1 غرام', '1 أونصة (31.10 غرام)', '1 كيلو'], locale: 'ar-u-nu-latn-ca-gregory' },
   };
   let lang = 'en';
   const ql = (q.get('lang') || '').toLowerCase();
