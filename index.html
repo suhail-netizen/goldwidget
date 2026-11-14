@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gold Price Widget</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Webpage by default. OBS overlay: add ?obs=1 (transparent, no page background); ?obs=1&bg=1 keeps the dark panel. ?scale=1.5 resizes. */
+  :root { --scale: 1; --accent: #D4AF37; --up: #3FBF7F; --down: #E5534B; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: "Segoe UI", "Noto Sans Arabic", Tahoma, Arial, sans-serif; background: #070d17; min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 32px 16px; }
+  html.obs, html.obs body { background: transparent; overflow: hidden; }
+  html.obs body { display: block; min-height: 0; padding: 0; }
+
+  #card {
+    width: min(calc(380px * var(--scale)), 100%);
+    padding: calc(22px * var(--scale)) calc(26px * var(--scale));
+    background: transparent;
+    border: calc(2px * var(--scale)) solid transparent;
+    border-radius: calc(22px * var(--scale));
+    color: #fff;
+    text-shadow: 0 0 6px rgba(0,0,0,.85), 0 2px 10px rgba(0,0,0,.7);
+    font-size: calc(16px * var(--scale));
+    opacity: 0; transform: translateY(12px);
+    transition: opacity .8s ease, transform .8s ease;
+  }
+  #card.on { opacity: 1; transform: none; }
+  #card.panel { background: rgba(10, 18, 30, .88); border-color: rgba(255,255,255,.14); border-top: calc(5px * var(--scale)) solid var(--accent); text-shadow: none; }
+
+  .head { display: flex; justify-content: center; align-items: baseline; gap: .4em; }
+  .title { font-size: 1.5em; font-weight: 600; color: var(--accent); }
+  .title span { margin-inline-start: .3em; font-size: 1.1em; }
+  .unit { text-align: center; font-size: 1em; color: #c9d3de; margin-top: .1em; }
+
+  .row { display: flex; justify-content: space-between; align-items: baseline; margin-top: .45em; font-variant-numeric: tabular-nums; }
+  .row .cur { font-size: 1.3em; color: #dde3ea; font-weight: 600; }
+  .row .val { font-size: 3em; font-weight: 600; line-height: 1.05; transition: opacity .4s ease; }
+  .row.sar .val { font-size: 2.4em; }
+  .val.out { opacity: 0; }
+
+  .foot { display: flex; justify-content: space-between; align-items: baseline; font-size: 1.2em; color: #dde3ea; border-top: 1px solid rgba(255,255,255,.16); padding-top: .5em; margin-top: .5em; font-variant-numeric: tabular-nums; }
+  #chg.up { color: var(--up); }
+  #chg.down { color: var(--down); }
+  #card.old #time::after { content: " • stale"; color: #E8A33D; }
+
+  .bars { width: 100%; border-collapse: collapse; margin-top: .7em; font-size: 1.05em; font-variant-numeric: tabular-nums; transition: opacity .4s ease; }
+  .bars.out { opacity: 0; }
+  .bars caption { text-align: start; color: var(--accent); font-weight: 600; font-size: 1.05em; padding-bottom: .3em; }
+  .bars caption small { color: #c9d3de; font-weight: 400; font-size: .8em; margin-inline-start: .4em; }
+  .bars th { color: #c9d3de; font-weight: 600; font-size: .85em; text-align: end; padding: .15em 0; border-bottom: 1px solid rgba(255,255,255,.16); }
+  .bars th:first-child, .bars td:first-child { text-align: start; }
+  .bars td { text-align: end; padding: .22em 0; color: #f2f4f7; }
+  .bars td:first-child { color: #dde3ea; font-weight: 600; }
+  .bars tr + tr td { border-top: 1px solid rgba(255,255,255,.07); }
+  .bars td + td, .bars th + th { padding-inline-start: .8em; }
+</style>
+</head>
+<body>
+
+<div id="card">
+  <div class="head"><div class="title">Gold<span>الذهب</span></div></div>
+  <div class="unit">Spot price · per troy ounce</div>
+  <div class="row usd"><span class="cur">USD</span><span class="val" id="usd">--</span></div>
+  <div class="row sar"><span class="cur">SAR</span><span class="val" id="sar">--</span></div>
+  <div class="foot"><span id="chg">—</span><span id="time">Loading…</span></div>
+  <table class="bars" id="bars">
+    <caption>Bullion<small>24K spot value, no premium</small></caption>
+    <thead><tr><th>Size</th><th>USD</th><th>SAR</th></tr></thead>
+    <tbody id="bars-body"></tbody>
+  </table>
+</div>
+
+<script>
+(() => {
+  // Optional URL params: ?obs=1 (transparent overlay), &bg=1 (panel in overlay), ?scale=1.5, ?accent=%23c8102e
+  const q = new URLSearchParams(location.search);
+  const obs = q.get('obs') === '1';
+  if (obs) document.documentElement.classList.add('obs');
+  if (q.get('scale')) document.documentElement.style.setProperty('--scale', q.get('scale'));
+  if (!obs || q.get('bg') === '1') document.getElementById('card').classList.add('panel');
+  if (q.get('accent')) document.documentElement.style.setProperty('--accent', q.get('accent'));
+
+  const GOLD_URL = 'https://api.gold-api.com/price/XAU';      // USD per troy ounce, no key
+  const FX_URL = 'https://open.er-api.com/v6/latest/USD';      // daily USD rates, no key
+  const REFRESH_MS = 5 * 60 * 1000;                            // gold: every 5 minutes
+  const FX_MAX_AGE_MS = 24 * 60 * 60 * 1000;                   // FX: once a day
+  const SAR_PEG = 3.75;                                         // used only if FX has never loaded
+  const GOLD_KEY = 'gold-widget-price-v1', FX_KEY = 'gold-widget-fx-v1';
+  const GRAMS_PER_OZ = 31.1034768;                              // troy ounce
+  const BARS = [['1 g', 1], ['2.5 g', 2.5], ['5 g', 5], ['1 oz', GRAMS_PER_OZ], ['100 g', 100], ['1 kg', 1000]];
+  const $ = id => document.getElementById(id);
+
+  // Memory copy first, so change/stale still work where browser storage is blocked.
+  const mem = {};
+  const load = k => { if (mem[k]) return mem[k]; try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+  const save = (k, v) => { mem[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  const money = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const clock = t => new Date(t).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
+
+  async function fetchJson(url) {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }
+
+  // Step 2: USD -> SAR rate, refreshed at most once a day; falls back to the last rate, then the peg.
+  async function sarRate() {
+    const fx = load(FX_KEY);
+    if (fx && Date.now() - fx.at < FX_MAX_AGE_MS) return fx.rate;
+    try {
+      const d = await fetchJson(FX_URL);
+      const rate = d && d.rates && d.rates.SAR;
+      if (typeof rate !== 'number' || !(rate > 0)) throw new Error('no SAR');
+      save(FX_KEY, { rate, at: Date.now() });
+      return rate;
+    } catch (e) {
+      return fx ? fx.rate : SAR_PEG;
+    }
+  }
+
+  // Step 3: show both prices, change since the previous refresh, and time of the price.
+  function render(p, stale) {
+    const usd = $('usd'), sar = $('sar'), bars = $('bars');
+    usd.classList.add('out'); sar.classList.add('out'); bars.classList.add('out');
+    setTimeout(() => {
+      usd.textContent = money(p.usd);
+      sar.textContent = money(p.usd * p.rate);
+      // Bullion table: grams x (spot / grams per ounce), in USD and SAR.
+      const perGram = p.usd / GRAMS_PER_OZ;
+      $('bars-body').innerHTML = BARS.map(([label, g]) =>
+        `<tr><td>${label}</td><td>${money(g * perGram)}</td><td>${money(g * perGram * p.rate)}</td></tr>`).join('');
+      usd.classList.remove('out'); sar.classList.remove('out'); bars.classList.remove('out');
+    }, 400);
+    const chg = $('chg');
+    chg.className = '';
+    if (p.prev != null && p.prev > 0) {
+      const d = p.usd - p.prev, pct = d / p.prev * 100;
+      const sign = d > 0 ? '▲ +' : d < 0 ? '▼ −' : '';
+      chg.textContent = d === 0 ? '0.00 (0.00%)' : `${sign}${money(Math.abs(d))} (${Math.abs(pct).toFixed(2)}%)`;
+      if (d > 0) chg.classList.add('up'); else if (d < 0) chg.classList.add('down');
+    } else {
+      chg.textContent = '—';
+    }
+    $('time').textContent = clock(p.at);
+    $('card').classList.toggle('old', !!stale);
+    $('card').classList.add('on');
+  }
+
+  async function update() {
+    const last = load(GOLD_KEY);
+    try {
+      // Step 1: spot gold in USD per ounce.
+      const g = await fetchJson(GOLD_URL);
+      if (typeof g.price !== 'number' || !(g.price > 0)) throw new Error('bad price');
+      const rate = await sarRate();
+      const at = g.updatedAt ? Date.parse(g.updatedAt) : Date.now();
+      // Keep the previous comparison point when the source hasn't moved to a new quote yet.
+      const prev = last ? (last.at === at ? last.prev : last.usd) : null;
+      const p = { usd: g.price, rate, at, prev };
+      save(GOLD_KEY, p);
+      render(p, false);
+    } catch (e) {
+      // Step 4: keep the last known price on screen and mark it stale.
+      if (last) render(last, true);
+      else $('time').textContent = 'Price unavailable';
+      $('card').classList.add('on');
+    }
+  }
+
+  update(); setInterval(update, REFRESH_MS);
+})();
+</script>
+</body>
+</html>
