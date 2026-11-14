@@ -41,6 +41,8 @@
   .chart { direction: ltr; }
   .wk-stats { flex-wrap: wrap; gap: .15em .8em; }
   .wk-stats > span { white-space: nowrap; }
+  .rs { display: inline-block; width: .82em; height: .9em; fill: currentColor; vertical-align: -.08em; margin-inline-end: .14em; }
+  .amt { white-space: nowrap; }
   [dir="rtl"] .wk-note, [dir="rtl"] .unit { line-height: 1.5; }
   .val.out { opacity: 0; }
 
@@ -86,6 +88,11 @@
 </style>
 </head>
 <body>
+
+<!-- New Saudi Riyal sign (glyph from @emran-alhaddad/saudi-riyal-font, SIL Open Font License 1.1) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="riyal-sign" viewBox="40 0 1150 1270"><path d="M750,1119C730,1163,716,1211,711,1262L1136,1172C1156,1127,1169,1079,1174,1028L750,1119Z M1136,901C1156,857,1169,809,1174,758L843,828L843,693L1136,631C1156,587,1169,538,1174,488L843,558L843,72C793,100,748,138,711,183L711,586L579,614L579,6C528,34,483,72,447,117L447,642L151,705C131,750,117,798,112,849L447,777L447,948L88,1024C68,1068,55,1117,50,1167L425,1088C456,1081,482,1063,499,1038L568,936C575,926,579,913,579,899L579,749L711,721L711,992L1136,901Z"/></symbol>
+</defs></svg>
 
 <div id="card">
   <div class="head"><div class="title">Gold<span>الذهب</span></div></div>
@@ -168,6 +175,9 @@
   const load = k => { if (mem[k]) return mem[k]; try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
   const save = (k, v) => { mem[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
   const money = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Amount as HTML: in SAR mode the new Saudi Riyal sign sits right before the number (kept left-to-right).
+  const RIYAL = '<svg class="rs" aria-label="SAR" role="img"><use href="#riyal-sign"/></svg>';
+  const amt = n => cur === 'SAR' ? `<bdi dir="ltr" class="amt">${RIYAL}${money(n)}</bdi>` : money(n);
   const clock = ts => new Date(ts).toLocaleString(t('locale'), { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
 
   async function fetchJson(url) {
@@ -186,11 +196,11 @@
     setTimeout(() => {
       $('cur-l').textContent = t(cur);
       $('bars-cur').textContent = t(cur);
-      price.textContent = money(conv(p.usd));
+      price.innerHTML = amt(conv(p.usd));
       // Bullion table: grams x (spot / grams per ounce).
       const perGram = p.usd / GRAMS_PER_OZ, sizes = t('sizes');
       $('bars-body').innerHTML = BARS.map(([, g], i) =>
-        `<tr><td>${sizes[i]}</td><td>${money(conv(g * perGram))}</td></tr>`).join('');
+        `<tr><td>${sizes[i]}</td><td>${amt(conv(g * perGram))}</td></tr>`).join('');
       price.classList.remove('out'); bars.classList.remove('out');
     }, 400);
     const chg = $('chg');
@@ -198,7 +208,7 @@
     if (p.prev != null && p.prev > 0) {
       const d = p.usd - p.prev, pct = d / p.prev * 100;
       const sign = d > 0 ? '▲ +' : d < 0 ? '▼ −' : '';
-      chg.textContent = d === 0 ? '0.00 (0.00%)' : `${sign}${money(Math.abs(conv(d)))} (${Math.abs(pct).toFixed(2)}%)`;
+      chg.innerHTML = d === 0 ? `${amt(0)} (0.00%)` : `${sign}${amt(Math.abs(conv(d)))} (${Math.abs(pct).toFixed(2)}%)`;
       if (d > 0) chg.classList.add('up'); else if (d < 0) chg.classList.add('down');
     } else {
       chg.textContent = '—';
@@ -257,8 +267,8 @@
     const last = week.c[week.c.length - 1], d = last - week.open, pct = d / week.open * 100;
     const chg = $('wk-chg');
     chg.className = d > 0 ? 'up' : d < 0 ? 'down' : '';
-    chg.textContent = `${d > 0 ? '▲ +' : d < 0 ? '▼ −' : ''}${money(Math.abs(conv(d)))} (${Math.abs(pct).toFixed(2)}%)`;
-    $('wk-hl').innerHTML = `${t('hi')} <bdi>${money(conv(week.hi))}</bdi> · ${t('lo')} <bdi>${money(conv(week.lo))}</bdi>`;
+    chg.innerHTML = `${d > 0 ? '▲ +' : d < 0 ? '▼ −' : ''}${amt(Math.abs(conv(d)))} (${Math.abs(pct).toFixed(2)}%)`;
+    $('wk-hl').innerHTML = `${t('hi')} <bdi>${amt(conv(week.hi))}</bdi> · ${t('lo')} <bdi>${amt(conv(week.lo))}</bdi>`;
 
     const W = svg.clientWidth || 320, H = svg.clientHeight || 150;
     const padR = 52, padB = 18, padT = 6;
@@ -304,7 +314,7 @@
     const cross = $('wk-cross'), dot = $('wk-dot');
     cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
     dot.setAttribute('cx', px); dot.setAttribute('cy', py);
-    tip.innerHTML = `<span dir="auto">${t(cur)} <bdi>${money(v)}</bdi></span><small dir="auto">${tipTime(ts)}</small>`;
+    tip.innerHTML = `<span dir="auto">${t(cur)} <bdi>${amt(v)}</bdi></span><small dir="auto">${tipTime(ts)}</small>`;
     const tw = tip.offsetWidth;
     tip.style.left = Math.max(0, Math.min(r.width - tw, px - tw / 2)) + 'px';
     tip.style.top = (py > 50 ? py - 46 : py + 12) + 'px';
