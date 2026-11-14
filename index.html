@@ -102,7 +102,7 @@
 </defs></svg>
 
 <div id="card">
-  <div class="head"><div class="title">Gold<span>الذهب</span></div></div>
+  <div class="head"><div class="title" data-i18n="title">Gold</div></div>
   <div class="unit" data-i18n="unit">Spot price · per troy ounce</div>
   <div class="tog-row">
     <div class="tog" role="group" aria-label="Currency"><button type="button" data-cur="USD">USD</button><button type="button" data-cur="SAR">SAR</button></div>
@@ -157,12 +157,12 @@
   // Language: English (default) or Arabic (right-to-left, Western digits). ?lang=ar|en wins, else last choice.
   const LANG_KEY = 'gold-widget-lang';
   const T = {
-    en: { unit: 'Spot price · per troy ounce', loading: 'Loading…', bullion: 'Bullion', bullionNote: '24K spot value, no premium',
+    en: { title: 'Gold', unit: 'Spot price · per troy ounce', loading: 'Loading…', bullion: 'Bullion', bullionNote: '24K spot value, no premium',
           size: 'Size', priceCol: 'Price', note: 'PAX Gold (PAXG), a token backed by 1 oz of gold — tracks spot closely',
           rngTitle: ['Past 7 days', 'Past 30 days', 'Past year'], rngShort: ['7D', '30D', '1Y'],
           USD: 'USD', SAR: 'SAR', hi: 'H', lo: 'L', stale: 'stale', noPrice: 'Price unavailable', noChart: 'Chart unavailable',
           sizes: ['1 g', '1 oz (31.10 g)', '1 kg'], locale: 'en-GB' },
-    ar: { unit: 'السعر الفوري · للأونصة', loading: 'جارٍ التحميل…', bullion: 'السبائك', bullionNote: 'قيمة فورية عيار 24، بدون رسوم',
+    ar: { title: 'الذهب', unit: 'السعر الفوري · للأونصة', loading: 'جارٍ التحميل…', bullion: 'السبائك', bullionNote: 'قيمة فورية عيار 24، بدون رسوم',
           size: 'الوزن', priceCol: 'السعر', note: 'PAX Gold (PAXG)، رمز مغطّى بأونصة ذهب — يتبع السعر الفوري عن قرب',
           rngTitle: ['آخر 7 أيام', 'آخر 30 يوماً', 'آخر سنة'], rngShort: ['7 أيام', '30 يوماً', 'سنة'],
           USD: 'دولار', SAR: 'ريال', hi: 'أعلى', lo: 'أدنى', stale: 'غير محدّث', noPrice: 'السعر غير متاح', noChart: 'الرسم غير متاح',
@@ -176,6 +176,7 @@
   function applyLang() {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.title = lang === 'ar' ? 'سعر الذهب' : 'Gold Price';
     document.querySelectorAll('[data-i18n]').forEach(el => {
       if (el.id === 'time' && el.dataset.filled) return;   // time is filled by render
       el.textContent = t(el.dataset.i18n);
