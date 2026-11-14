@@ -19,6 +19,7 @@
     --accent: var(--gold-500);
     --up: var(--gold-300); --down: var(--ink-muted);            /* brand: no red/green pairs; arrows carry direction */
     --chart-line: var(--gold-500); --stale: var(--gold-700); --motif: .07;
+    --arrow-up: #7CC49A; --arrow-down: #E08A82;                 /* soft green / soft red, arrows only */
     color-scheme: dark;
     --font-display: "Outfit", "Montserrat", system-ui, sans-serif;
     --font-sans: "Inter", system-ui, sans-serif;
@@ -28,13 +29,13 @@
   /* Day theme: chosen by ?theme=light / the switch, or automatically when the device is in light mode. */
   :root[data-theme="light"] {
     --gold-ink: #7D5F17; --surface: #FAF7F0; --surface-raised: #F1EBDD; --ink: #16140F; --ink-muted: #5E574B; --line: #DDD3BF;
-    --up: var(--gold-ink); --chart-line: var(--gold-ink); --stale: var(--gold-ink); --motif: .14;
+    --up: var(--gold-ink); --chart-line: var(--gold-ink); --stale: var(--gold-ink); --motif: .14; --arrow-up: #3E8A5E; --arrow-down: #B4534B;
     color-scheme: light;
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
       --gold-ink: #7D5F17; --surface: #FAF7F0; --surface-raised: #F1EBDD; --ink: #16140F; --ink-muted: #5E574B; --line: #DDD3BF;
-      --up: var(--gold-ink); --chart-line: var(--gold-ink); --stale: var(--gold-ink); --motif: .14;
+      --up: var(--gold-ink); --chart-line: var(--gold-ink); --stale: var(--gold-ink); --motif: .14; --arrow-up: #3E8A5E; --arrow-down: #B4534B;
       color-scheme: light;
     }
   }
@@ -90,6 +91,8 @@
   [dir="rtl"] .wk-note, [dir="rtl"] .unit { line-height: 1.6; }
 
   .foot { display: flex; justify-content: space-between; align-items: baseline; font-size: .95em; color: var(--ink-muted); border-top: 1px solid var(--line); padding-top: .6em; margin-top: .7em; font-variant-numeric: tabular-nums; }
+  .arr.up { color: var(--arrow-up); }
+  .arr.down { color: var(--arrow-down); }
   #chg.up, #wk-chg.up { color: var(--up); }
   #chg.down, #wk-chg.down { color: var(--down); }
 
@@ -298,7 +301,7 @@
     chg.className = '';
     if (p.prev != null && p.prev > 0) {
       const d = p.usd - p.prev, pct = d / p.prev * 100;
-      const sign = d > 0 ? '▲ +' : d < 0 ? '▼ −' : '';
+      const sign = d > 0 ? '<span class="arr up">▲</span> +' : d < 0 ? '<span class="arr down">▼</span> −' : '';
       chg.innerHTML = d === 0 ? `${amt(0)} (0.00%)` : `${sign}${amt(Math.abs(conv(d)))} (${Math.abs(pct).toFixed(2)}%)`;
       if (d > 0) chg.classList.add('up'); else if (d < 0) chg.classList.add('down');
     } else {
@@ -429,7 +432,7 @@
     const last = week.c[week.c.length - 1], d = last - week.open, pct = d / week.open * 100;
     const chg = $('wk-chg');
     chg.className = d > 0 ? 'up' : d < 0 ? 'down' : '';
-    chg.innerHTML = `${d > 0 ? '▲ +' : d < 0 ? '▼ −' : ''}${amt(Math.abs(conv(d)))} (${Math.abs(pct).toFixed(2)}%)`;
+    chg.innerHTML = `${d > 0 ? '<span class="arr up">▲</span> +' : d < 0 ? '<span class="arr down">▼</span> −' : ''}${amt(Math.abs(conv(d)))} (${Math.abs(pct).toFixed(2)}%)`;
     $('wk-hl').innerHTML = `${t('hi')} <bdi>${amt(conv(week.hi))}</bdi> · ${t('lo')} <bdi>${amt(conv(week.lo))}</bdi>`;
 
     const W = svg.clientWidth || 320, H = svg.clientHeight || 150;
