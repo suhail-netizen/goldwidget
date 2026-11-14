@@ -20,6 +20,7 @@
     --up: var(--gold-300); --down: var(--ink-muted);            /* brand: no red/green pairs; arrows carry direction */
     --chart-line: var(--gold-500); --stale: var(--gold-700); --motif: .07;
     --arrow-up: #7CC49A; --arrow-down: #E08A82;                 /* soft green / soft red, arrows only */
+    --silver-ink: #CDD2D9;                                      /* "Silver" title on Night */
     color-scheme: dark;
     --font-display: "Outfit", "Montserrat", system-ui, sans-serif;
     --font-sans: "Inter", system-ui, sans-serif;
@@ -30,12 +31,14 @@
   :root[data-theme="light"] {
     --gold-ink: #7D5F17; --surface: #FAF7F0; --surface-raised: #F1EBDD; --ink: #16140F; --ink-muted: #5E574B; --line: #DDD3BF;
     --up: var(--gold-ink); --chart-line: var(--gold-ink); --stale: var(--gold-ink); --motif: .14; --arrow-up: #3E8A5E; --arrow-down: #B4534B;
+    --silver-ink: #5C626B;
     color-scheme: light;
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
       --gold-ink: #7D5F17; --surface: #FAF7F0; --surface-raised: #F1EBDD; --ink: #16140F; --ink-muted: #5E574B; --line: #DDD3BF;
       --up: var(--gold-ink); --chart-line: var(--gold-ink); --stale: var(--gold-ink); --motif: .14; --arrow-up: #3E8A5E; --arrow-down: #B4534B;
+      --silver-ink: #5C626B;
       color-scheme: light;
     }
   }
@@ -75,6 +78,7 @@
   .head { display: flex; justify-content: center; margin-top: 1.1em; padding-top: .9em; border-top: 1px solid var(--line); }
   .title { font-family: var(--font-display); font-size: 2em; font-weight: 500; line-height: 1.15; color: var(--gold-ink); }
   [dir="rtl"] .title { font-family: var(--font-ar-display); font-size: 1.9em; line-height: 1.5; }   /* Alexandria; never letter-space Arabic */
+  [data-metal="silver"] .title { color: var(--silver-ink); }
   .unit { text-align: center; font-size: .82em; color: var(--ink-muted); margin-top: .2em; }
 
   .row { display: flex; justify-content: center; align-items: baseline; margin-top: .3em; font-variant-numeric: tabular-nums; }
@@ -250,6 +254,7 @@
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
     document.title = t('doc');
+    document.documentElement.dataset.metal = metal;            // silver title colour
     $('wk-svg').setAttribute('aria-label', t('chartLabel'));
     document.querySelectorAll('[data-i18n]').forEach(el => {
       if (el.id === 'time' && el.dataset.filled) return;   // time is filled by render
