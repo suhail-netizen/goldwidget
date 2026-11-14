@@ -54,6 +54,30 @@
   .bars td:first-child { color: #dde3ea; font-weight: 600; }
   .bars tr + tr td { border-top: 1px solid rgba(255,255,255,.07); }
   .bars td + td, .bars th + th { padding-inline-start: .8em; }
+
+  /* Past-week chart */
+  .wk { margin-top: 1em; border-top: 1px solid rgba(255,255,255,.16); padding-top: .7em; }
+  .wk-head { display: flex; justify-content: space-between; align-items: center; }
+  .wk-title { color: var(--accent); font-weight: 600; font-size: 1.1em; }
+  .tog { display: inline-flex; border: 1px solid rgba(255,255,255,.18); border-radius: 999px; padding: 2px; }
+  .tog button { font: inherit; font-size: .8em; font-weight: 600; color: #c9d3de; background: none; border: 0; border-radius: 999px; padding: .2em .8em; cursor: pointer; }
+  .tog button.on { background: var(--accent); color: #0a121e; }
+  .tog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .wk-stats { display: flex; justify-content: space-between; align-items: baseline; margin-top: .45em; font-size: 1em; color: #dde3ea; font-variant-numeric: tabular-nums; }
+  #wk-chg.up { color: var(--up); }
+  #wk-chg.down { color: var(--down); }
+  #wk-hl { color: #c9d3de; font-size: .9em; }
+  .chart { position: relative; margin-top: .4em; height: calc(150px * var(--scale)); touch-action: pan-y; }
+  .chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .chart .grid { stroke: rgba(255,255,255,.08); stroke-width: 1; }
+  .chart .ylab, .chart .xlab { fill: #8d9bab; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .chart .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart .cross { stroke: rgba(255,255,255,.35); stroke-width: 1; }
+  .chart .dot { fill: var(--accent); stroke: #0a121e; stroke-width: 2; }
+  .tip { position: absolute; top: 0; pointer-events: none; background: rgba(5,10,18,.95); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; padding: .3em .55em; font-size: .8em; white-space: nowrap; color: #f2f4f7; text-shadow: none; opacity: 0; transition: opacity .15s; font-variant-numeric: tabular-nums; }
+  .tip small { display: block; color: #8d9bab; }
+  .wk-note { margin-top: .3em; font-size: .75em; color: #8d9bab; }
+  html.obs .tog { display: none; }
 </style>
 </head>
 <body>
@@ -69,6 +93,15 @@
     <thead><tr><th>Size</th><th>USD</th><th>SAR</th></tr></thead>
     <tbody id="bars-body"></tbody>
   </table>
+  <div class="wk">
+    <div class="wk-head">
+      <span class="wk-title">Past 7 days</span>
+      <div class="tog" role="group" aria-label="Chart currency"><button type="button" data-cur="USD" class="on">USD</button><button type="button" data-cur="SAR">SAR</button></div>
+    </div>
+    <div class="wk-stats"><span id="wk-chg">—</span><span id="wk-hl"></span></div>
+    <div class="chart" id="chart"><svg id="wk-svg" role="img" aria-label="Gold price, past 7 days"></svg><div class="tip" id="tip"></div></div>
+    <div class="wk-note">Hourly · PAX Gold (PAXG), a token backed by 1 oz of gold — tracks spot closely</div>
+  </div>
 </div>
 
 <script>
@@ -151,7 +184,114 @@
     }
   }
 
-  update(); setInterval(update, REFRESH_MS);
+  // ---- Past-week chart: hourly PAXG candles from Binance (free, no key) ----
+  const WEEK_URL = 'https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=1h&limit=168';
+  const WEEK_KEY = 'gold-widget-week-v1', CUR_KEY = 'gold-widget-cur';
+  let week = load(WEEK_KEY), cur = 'USD';
+  try { if (localStorage.getItem(CUR_KEY) === 'SAR') cur = 'SAR'; } catch (e) {}
+  const conv = v => cur === 'SAR' ? v * SAR_RATE : v;
+  const dayName = t => new Date(t).toLocaleDateString('en-GB', { timeZone: 'Asia/Riyadh', weekday: 'short' });
+  const riyadhHour = t => +new Date(t).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', hour12: false });
+  const tipTime = t => new Date(t).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+  async function loadWeek() {
+    try {
+      const k = await fetchJson(WEEK_URL);
+      if (!Array.isArray(k) || k.length < 2) throw new Error('no data');
+      // [openTime, open, high, low, close, volume, closeTime, ...]
+      const w = { t: k.map(r => r[6] + 1), c: k.map(r => +r[4]), open: +k[0][1],
+                  hi: Math.max(...k.map(r => +r[2])), lo: Math.min(...k.map(r => +r[3])) };
+      if (w.c.some(v => !(v > 0))) throw new Error('bad data');
+      week = w; save(WEEK_KEY, w);
+    } catch (e) { /* keep the last chart */ }
+    drawWeek();
+  }
+
+  let pts = [];
+  function drawWeek() {
+    const svg = $('wk-svg');
+    if (!week) { $('wk-chg').textContent = 'Chart unavailable'; svg.innerHTML = ''; return; }
+    const last = week.c[week.c.length - 1], d = last - week.open, pct = d / week.open * 100;
+    const chg = $('wk-chg');
+    chg.className = d > 0 ? 'up' : d < 0 ? 'down' : '';
+    chg.textContent = `${d > 0 ? '▲ +' : d < 0 ? '▼ −' : ''}${money(Math.abs(conv(d)))} (${Math.abs(pct).toFixed(2)}%)`;
+    $('wk-hl').textContent = `H ${money(conv(week.hi))} · L ${money(conv(week.lo))}`;
+
+    const W = svg.clientWidth || 320, H = svg.clientHeight || 150;
+    const padR = 52, padB = 18, padT = 6;
+    const vals = week.c.map(conv);
+    let min = Math.min(...vals), max = Math.max(...vals);
+    const span = (max - min) || max * .001; min -= span * .08; max += span * .08;
+    const n = vals.length, x = i => i / (n - 1) * (W - padR), y = v => padT + (1 - (v - min) / (max - min)) * (H - padT - padB);
+    pts = vals.map((v, i) => [x(i), y(v), v, week.t[i]]);
+    const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('');
+    const base = H - padB;
+
+    let grid = '';
+    [max - (max - min) * .08 / 1.16, (max + min) / 2, min + (max - min) * .08 / 1.16].forEach(v => {
+      const yy = y(v).toFixed(1);
+      grid += `<line class="grid" x1="0" x2="${W - padR}" y1="${yy}" y2="${yy}"/><text class="ylab" x="${W - padR + 6}" y="${(+yy + 4).toFixed(1)}">${Math.round(v).toLocaleString('en-US')}</text>`;
+    });
+    let xl = '';
+    for (let i = 1; i < n; i++) {
+      if (riyadhHour(week.t[i]) === 0) {           // Riyadh midnight -> day tick
+        const xx = x(i).toFixed(1);
+        xl += `<line class="grid" x1="${xx}" x2="${xx}" y1="${padT}" y2="${base}"/>`;
+        if (x(i) < W - padR - 14) xl += `<text class="xlab" x="${(x(i) + 3).toFixed(1)}" y="${H - 4}">${dayName(week.t[i])}</text>`;
+      }
+    }
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.innerHTML =
+      `<defs><linearGradient id="wk-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".28"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>` +
+      grid + xl +
+      `<path d="${line}L${pts[n - 1][0].toFixed(1)} ${base}L0 ${base}Z" fill="url(#wk-fill)"/>` +
+      `<path class="line" d="${line}"/>` +
+      `<line class="cross" id="wk-cross" y1="${padT}" y2="${base}" visibility="hidden"/>` +
+      `<circle class="dot" id="wk-dot" r="4.5" cx="${pts[n - 1][0]}" cy="${pts[n - 1][1]}"/>`;
+  }
+
+  // Crosshair + tooltip on hover/touch.
+  const chartEl = $('chart'), tip = $('tip');
+  function hover(ev) {
+    if (!pts.length) return;
+    const r = chartEl.getBoundingClientRect(), mx = ev.clientX - r.left;
+    let i = Math.round(mx / pts[pts.length - 1][0] * (pts.length - 1));
+    i = Math.max(0, Math.min(pts.length - 1, i));
+    const [px, py, v, t] = pts[i];
+    const cross = $('wk-cross'), dot = $('wk-dot');
+    cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
+    dot.setAttribute('cx', px); dot.setAttribute('cy', py);
+    tip.innerHTML = `${cur} ${money(v)}<small>${tipTime(t)}</small>`;
+    const tw = tip.offsetWidth;
+    tip.style.left = Math.max(0, Math.min(r.width - tw, px - tw / 2)) + 'px';
+    tip.style.top = (py > 50 ? py - 46 : py + 12) + 'px';
+    tip.style.opacity = 1;
+  }
+  function unhover() {
+    tip.style.opacity = 0;
+    if (!pts.length) return;
+    const last = pts[pts.length - 1];
+    $('wk-cross').setAttribute('visibility', 'hidden');
+    $('wk-dot').setAttribute('cx', last[0]); $('wk-dot').setAttribute('cy', last[1]);
+  }
+  chartEl.addEventListener('pointermove', hover);
+  chartEl.addEventListener('pointerdown', hover);
+  chartEl.addEventListener('pointerleave', unhover);
+
+  // USD | SAR switch (remembered per viewer).
+  document.querySelectorAll('.tog button').forEach(b => {
+    b.classList.toggle('on', b.dataset.cur === cur);
+    b.addEventListener('click', () => {
+      cur = b.dataset.cur;
+      try { localStorage.setItem(CUR_KEY, cur); } catch (e) {}
+      document.querySelectorAll('.tog button').forEach(o => o.classList.toggle('on', o === b));
+      drawWeek();
+    });
+  });
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawWeek, 150); });
+
+  update(); loadWeek();
+  setInterval(() => { update(); loadWeek(); }, REFRESH_MS);
 })();
 </script>
 </body>
