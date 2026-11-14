@@ -85,7 +85,7 @@
   .row .val { font-family: var(--font-display); font-size: 3em; font-weight: 500; line-height: 1.1; letter-spacing: .01em; transition: opacity .4s ease; }
   .val.out { opacity: 0; }
   .tog-row { display: flex; flex-wrap: wrap; justify-content: center; gap: .5em .6em; margin-top: .8em; }
-  .tog-row + .tog-row { margin-top: .5em; }
+  .tog-row.top { margin-top: .9em; }                            /* language + theme, just under the logo */
   #card.old #time::after { content: " • " attr(data-stale); color: var(--stale); }
   .chart { direction: ltr; }
   .wk-stats { flex-wrap: wrap; gap: .15em .8em; }
@@ -158,15 +158,15 @@
     <span class="en"><img data-logo="treynoor-logo-horizontal" src="treynoor-logo-horizontal-gold.svg" alt="Treynoor"></span>
     <span class="ar"><img data-logo="treynoor-monogram" src="treynoor-monogram-gold.svg" alt=""><img class="wm" data-logo="treynoor-wordmark-ar" src="treynoor-wordmark-ar.svg" alt="ترينور"></span>
   </div>
+  <div class="tog-row top">
+    <div class="tog" role="group" aria-label="Language"><button type="button" data-lang="en">EN</button><button type="button" data-lang="ar" lang="ar">ع</button></div>
+    <div class="tog" role="group" aria-label="Theme"><button type="button" data-theme-btn="dark" aria-label="Dark">☾</button><button type="button" data-theme-btn="light" aria-label="Light">☀</button></div>
+  </div>
   <div class="head"><div class="title" data-i18n="title">Gold</div></div>
   <div class="unit" data-i18n="unit">Spot price · per troy ounce</div>
   <div class="tog-row">
     <div class="tog" role="group" aria-label="Metal"><button type="button" data-metal="gold" data-i18n="mGold">Gold</button><button type="button" data-metal="silver" data-i18n="mSilver">Silver</button></div>
-  </div>
-  <div class="tog-row">
     <div class="tog" role="group" aria-label="Currency"><button type="button" data-cur="USD">USD</button><button type="button" data-cur="SAR">SAR</button></div>
-    <div class="tog" role="group" aria-label="Language"><button type="button" data-lang="en">EN</button><button type="button" data-lang="ar" lang="ar">ع</button></div>
-    <div class="tog" role="group" aria-label="Theme"><button type="button" data-theme-btn="dark" aria-label="Dark">☾</button><button type="button" data-theme-btn="light" aria-label="Light">☀</button></div>
   </div>
   <div class="row"><span class="val" id="price">--</span></div>
   <div class="foot"><span id="chg" dir="ltr">—</span><span id="time" data-i18n="loading">Loading…</span></div>
