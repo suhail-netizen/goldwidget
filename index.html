@@ -29,7 +29,7 @@
   #card.panel { background: rgba(10, 18, 30, .88); border-color: rgba(255,255,255,.14); border-top: calc(5px * var(--scale)) solid var(--accent); text-shadow: none; }
 
   .head { display: flex; justify-content: center; align-items: baseline; gap: .4em; }
-  .title { font-size: 1.5em; font-weight: 600; color: var(--accent); }
+  .title { font-size: 2.2em; font-weight: 600; line-height: 1.15; color: var(--accent); }
   .title span { margin-inline-start: .3em; font-size: 1.1em; }
   .unit { text-align: center; font-size: 1em; color: #c9d3de; margin-top: .1em; }
 
@@ -252,12 +252,14 @@
   }
 
   // ---- History chart: PAXG candles from Binance (free, no key), rotating 7 days -> 30 days -> 1 year ----
-  const KLINES = 'https://api.binance.com/api/v3/klines?symbol=PAXGUSDT';
-  const MIN = 60 * 1000, RIYADH_OFFSET = 3 * 60 * MIN;          // Riyadh is UTC+3 all year
+  // Binance's public market-data mirror: same data as api.binance.com, reachable from more countries.
+  const KLINES = 'https://data-api.binance.vision/api/v3/klines?symbol=PAXGUSDT';
+  const HISTORY_URL = 'history.json';                               // written once a day by the GitHub job
+  const MIN = 60 * 1000, HOUR = 60 * MIN, RIYADH_OFFSET = 3 * HOUR;   // Riyadh is UTC+3 all year
   const RANGES = [
-    { id: '7d',  q: '&interval=1h&limit=168', maxAge: 5 * MIN,  tick: 'day'   },   // hourly
-    { id: '30d', q: '&interval=4h&limit=180', maxAge: 30 * MIN, tick: 'week'  },   // every 4 hours
-    { id: '1y',  q: '&interval=1d&limit=365', maxAge: 30 * MIN, tick: 'month' },   // daily
+    { id: '7d',  interval: '1h', ms: HOUR,      n: 168, maxAge: 5 * MIN,  tick: 'day'   },   // hourly
+    { id: '30d', interval: '4h', ms: 4 * HOUR,  n: 180, maxAge: 30 * MIN, tick: 'week'  },   // every 4 hours
+    { id: '1y',  interval: '1d', ms: 24 * HOUR, n: 365, maxAge: 30 * MIN, tick: 'month' },   // daily
   ];
   const ROTATE_MS = 10 * 1000;
   const data = {};
@@ -275,20 +277,48 @@
                    '30d': { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
                    '1y': { day: 'numeric', month: 'short', year: 'numeric' } };
 
+  // Stored history first (one small file from this site), then only the candles since it was written.
+  let hist = null, histTried = false;
+  async function loadHistory() {
+    if (histTried) return;
+    histTried = true;
+    try {
+      const h = await fetchJson(HISTORY_URL);
+      // Use it only if it is recent (the job runs daily; allow a missed day).
+      if (h && h.ranges && Date.now() - Date.parse(h.generatedAt) < 3 * 24 * HOUR) hist = h;
+    } catch (e) { /* no file: fall back to fetching everything live */ }
+  }
+  const candles = k => ({ t: k.map(x => x[6] + 1), o: k.map(x => +x[1]), h: k.map(x => +x[2]), l: k.map(x => +x[3]), c: k.map(x => +x[4]) });
+
   async function loadRange(r, force) {
     const cached = data[r.id];
     if (!force && cached && Date.now() - cached.at < r.maxAge) return;
     try {
-      const k = await fetchJson(KLINES + r.q);
-      if (!Array.isArray(k) || k.length < 2) throw new Error('no data');
-      // [openTime, open, high, low, close, volume, closeTime, ...]
-      const w = { t: k.map(x => x[6] + 1), c: k.map(x => +x[4]), open: +k[0][1],
-                  hi: Math.max(...k.map(x => +x[2])), lo: Math.min(...k.map(x => +x[3])), at: Date.now() };
-      if (w.c.some(v => !(v > 0))) throw new Error('bad data');
+      // [openTime, open, high, low, close, volume, closeTime, ...]; t = end of each candle
+      const base = hist && hist.ranges[r.id];
+      let s;
+      if (base && base.t && base.t.length > 1) {
+        s = { t: base.t.slice(), o: base.o.slice(), h: base.h.slice(), l: base.l.slice(), c: base.c.slice() };
+        try {
+          const k = await fetchJson(`${KLINES}&interval=${r.interval}&startTime=${s.t[s.t.length - 1]}&limit=1000`);
+          const live = candles(Array.isArray(k) ? k : []);
+          live.t.forEach((tt, i) => {
+            if (tt <= s.t[s.t.length - 1]) return;
+            ['t', 'o', 'h', 'l', 'c'].forEach(f => s[f].push(live[f][i]));
+          });
+        } catch (e) { /* top-up failed: the stored file alone is still useful */ }
+      } else {
+        s = candles(await fetchJson(`${KLINES}&interval=${r.interval}&limit=${r.n}`));
+      }
+      const from = Math.max(0, s.t.length - r.n);       // keep the window for this range
+      ['t', 'o', 'h', 'l', 'c'].forEach(f => { s[f] = s[f].slice(from); });
+      if (s.t.length < 2 || s.c.some(v => !(v > 0))) throw new Error('bad data');
+      const w = { t: s.t, c: s.c, open: s.o[0], hi: Math.max(...s.h), lo: Math.min(...s.l), at: Date.now() };
       data[r.id] = w; save('gold-widget-range-' + r.id + '-v1', w);
     } catch (e) { /* keep the last data for this range */ }
   }
   async function loadRanges(force) {
+    await loadHistory();
     await Promise.all(RANGES.map(r => loadRange(r, force)));
     drawChart();
   }
