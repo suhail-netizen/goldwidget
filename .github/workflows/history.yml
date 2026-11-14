@@ -1,9 +1,10 @@
-name: Daily gold history
+name: Gold history
 
 on:
   schedule:
-    - cron: '5 21 * * *'   # 21:05 UTC = 00:05 Riyadh, every day
-  workflow_dispatch:        # "Run workflow" button for manual runs
+    - cron: '2 * * * *'    # every hour: record the spot price (free endpoint, no key)
+    - cron: '5 21 * * *'   # 21:05 UTC = 00:05 Riyadh: also fetch daily spot history (uses GOLD_API_KEY)
+  workflow_dispatch:        # "Run workflow" button = full daily run
 
 permissions:
   contents: write
@@ -24,7 +25,10 @@ jobs:
           python-version: '3.12'
 
       - name: Update history.json
-        run: python scripts/update_history.py
+        env:
+          GOLD_API_KEY: ${{ secrets.GOLD_API_KEY }}
+          MODE: ${{ github.event.schedule == '2 * * * *' && 'hourly' || 'daily' }}
+        run: python scripts/update_history.py "$MODE"
 
       - name: Commit if changed
         run: |
@@ -35,7 +39,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add history.json
-          git commit -m "Daily gold history $(date -u +%Y-%m-%d)"
+          git commit -m "Gold history $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase -q || true
           git push
 
       - name: Ask Pages to rebuild

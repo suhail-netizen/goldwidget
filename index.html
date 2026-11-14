@@ -251,7 +251,7 @@
     }
   }
 
-  // ---- History chart: PAXG candles from Binance (free, no key), rotating 7 days -> 30 days -> 1 year ----
+  // ---- History chart: spot prices from history.json (PAXG candles from Binance as fallback), rotating 7 days -> 30 days -> 1 year ----
   // Binance's public market-data mirror: same data as api.binance.com, reachable from more countries.
   const KLINES = 'https://data-api.binance.vision/api/v3/klines?symbol=PAXGUSDT';
   const HISTORY_URL = 'history.json';                               // written once a day by the GitHub job
@@ -277,40 +277,53 @@
                    '30d': { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
                    '1y': { day: 'numeric', month: 'short', year: 'numeric' } };
 
-  // Stored history first (one small file from this site), then only the candles since it was written.
-  let hist = null, histTried = false;
+  // Stored history first (spot prices, written every hour by the GitHub job), then the live price on top.
+  // Re-read hourly so a page left open keeps up with the new hourly points.
+  let hist = null, histAt = 0;
   async function loadHistory() {
-    if (histTried) return;
-    histTried = true;
+    if (Date.now() - histAt < HOUR) return;
+    histAt = Date.now();
     try {
-      const h = await fetchJson(HISTORY_URL);
-      // Use it only if it is recent (the job runs daily; allow a missed day).
+      const h = await fetchJson(HISTORY_URL + '?h=' + Math.floor(Date.now() / HOUR));
+      // Use it only if it is recent (allow a missed day).
       if (h && h.ranges && Date.now() - Date.parse(h.generatedAt) < 3 * 24 * HOUR) hist = h;
     } catch (e) { /* no file: fall back to fetching everything live */ }
   }
   const candles = k => ({ t: k.map(x => x[6] + 1), o: k.map(x => +x[1]), h: k.map(x => +x[2]), l: k.map(x => +x[3]), c: k.map(x => +x[4]) });
+  const WINDOW = { '7d': 7 * 24 * HOUR, '30d': 31 * 24 * HOUR, '1y': 366 * 24 * HOUR };
 
   async function loadRange(r, force) {
     const cached = data[r.id];
     if (!force && cached && Date.now() - cached.at < r.maxAge) return;
     try {
-      // [openTime, open, high, low, close, volume, closeTime, ...]; t = end of each candle
+      // t = end of each period
       const base = hist && hist.ranges[r.id];
+      const spot = !!(base && base.src && base.src !== 'paxg');
       let s;
       if (base && base.t && base.t.length > 1) {
         s = { t: base.t.slice(), o: base.o.slice(), h: base.h.slice(), l: base.l.slice(), c: base.c.slice() };
-        try {
-          const k = await fetchJson(`${KLINES}&interval=${r.interval}&startTime=${s.t[s.t.length - 1]}&limit=1000`);
-          const live = candles(Array.isArray(k) ? k : []);
-          live.t.forEach((tt, i) => {
-            if (tt <= s.t[s.t.length - 1]) return;
-            ['t', 'o', 'h', 'l', 'c'].forEach(f => s[f].push(live[f][i]));
-          });
-        } catch (e) { /* top-up failed: the stored file alone is still useful */ }
+        if (spot) {
+          // Spot history: add the live spot price as the newest point.
+          const p = load(GOLD_KEY), lastT = s.t[s.t.length - 1];
+          if (p && p.usd > 0 && p.at > lastT) ['t', 'o', 'h', 'l', 'c'].forEach(f => s[f].push(f === 't' ? p.at : p.usd));
+        } else {
+          // PAXG history: top up with the Binance candles since the file was written.
+          try {
+            const k = await fetchJson(`${KLINES}&interval=${r.interval}&startTime=${s.t[s.t.length - 1]}&limit=1000`);
+            const live = candles(Array.isArray(k) ? k : []);
+            live.t.forEach((tt, i) => {
+              if (tt <= s.t[s.t.length - 1]) return;
+              ['t', 'o', 'h', 'l', 'c'].forEach(f => s[f].push(live[f][i]));
+            });
+          } catch (e) { /* top-up failed: the stored file alone is still useful */ }
+        }
       } else {
+        // [openTime, open, high, low, close, volume, closeTime, ...]
         s = candles(await fetchJson(`${KLINES}&interval=${r.interval}&limit=${r.n}`));
       }
-      const from = Math.max(0, s.t.length - r.n);       // keep the window for this range
+      // Keep the window for this range: by time for spot, by candle count for PAXG.
+      let from = Math.max(0, s.t.length - r.n);
+      if (spot) { from = s.t.findIndex(tt => tt > Date.now() - WINDOW[r.id]); if (from < 0) from = 0; }
       ['t', 'o', 'h', 'l', 'c'].forEach(f => { s[f] = s[f].slice(from); });
       if (s.t.length < 2 || s.c.some(v => !(v > 0))) throw new Error('bad data');
       const w = { t: s.t, c: s.c, open: s.o[0], hi: Math.max(...s.h), lo: Math.min(...s.l), at: Date.now() };
@@ -442,10 +455,10 @@
   wireSwitch('lang', () => lang, v => { lang = v; }, LANG_KEY);
   let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawChart, 150); });
 
-  update(); drawChart(); loadRanges(true);
+  drawChart(); update().then(() => loadRanges(true));
   showRange(0);
   // Every 5 min: spot price; each chart range refreshes only once its data is older than its maxAge.
-  setInterval(() => { update(); loadRanges(false); }, REFRESH_MS);
+  setInterval(() => { update().then(() => loadRanges(false)); }, REFRESH_MS);
 })();
 </script>
 </body>
