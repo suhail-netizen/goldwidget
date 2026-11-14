@@ -80,7 +80,8 @@
   .row { display: flex; justify-content: center; align-items: baseline; margin-top: .3em; font-variant-numeric: tabular-nums; }
   .row .val { font-family: var(--font-display); font-size: 3em; font-weight: 500; line-height: 1.1; letter-spacing: .01em; transition: opacity .4s ease; }
   .val.out { opacity: 0; }
-  .tog-row { display: flex; justify-content: center; gap: .6em; margin-top: .8em; }
+  .tog-row { display: flex; flex-wrap: wrap; justify-content: center; gap: .5em .6em; margin-top: .8em; }
+  .tog-row + .tog-row { margin-top: .5em; }
   #card.old #time::after { content: " • " attr(data-stale); color: var(--stale); }
   .chart { direction: ltr; }
   .wk-stats { flex-wrap: wrap; gap: .15em .8em; }
@@ -156,6 +157,9 @@
   <div class="head"><div class="title" data-i18n="title">Gold</div></div>
   <div class="unit" data-i18n="unit">Spot price · per troy ounce</div>
   <div class="tog-row">
+    <div class="tog" role="group" aria-label="Metal"><button type="button" data-metal="gold" data-i18n="mGold">Gold</button><button type="button" data-metal="silver" data-i18n="mSilver">Silver</button></div>
+  </div>
+  <div class="tog-row">
     <div class="tog" role="group" aria-label="Currency"><button type="button" data-cur="USD">USD</button><button type="button" data-cur="SAR">SAR</button></div>
     <div class="tog" role="group" aria-label="Language"><button type="button" data-lang="en">EN</button><button type="button" data-lang="ar" lang="ar">ع</button></div>
     <div class="tog" role="group" aria-label="Theme"><button type="button" data-theme-btn="dark" aria-label="Dark">☾</button><button type="button" data-theme-btn="light" aria-label="Light">☀</button></div>
@@ -189,10 +193,13 @@
   if (!obs || q.get('bg') === '1') document.getElementById('card').classList.add('panel');
   if (q.get('accent')) document.documentElement.style.setProperty('--accent', q.get('accent'));
 
-  const GOLD_URL = 'https://api.gold-api.com/price/XAU';      // USD per troy ounce, no key
-  const REFRESH_MS = 5 * 60 * 1000;                            // gold: every 5 minutes
+  // Two metals, one page: spot price in USD per troy ounce from gold-api.com (free, no key).
+  const METALS = {
+    gold:   { url: 'https://api.gold-api.com/price/XAU', key: 'gold-widget-price-v1',        rangeKey: '-v1' },
+    silver: { url: 'https://api.gold-api.com/price/XAG', key: 'gold-widget-price-silver-v1', rangeKey: '-silver-v1' },
+  };
+  const REFRESH_MS = 5 * 60 * 1000;                            // every 5 minutes
   const SAR_RATE = 3.76;                                        // fixed: 1 USD = 3.76 SAR
-  const GOLD_KEY = 'gold-widget-price-v1';
   const GRAMS_PER_OZ = 31.1034768;                              // troy ounce
   const BARS = [['1 g', 1], ['1 oz', GRAMS_PER_OZ], ['1 kg', 1000]];
   const $ = id => document.getElementById(id);
@@ -205,6 +212,13 @@
   else { try { if (localStorage.getItem(CUR_KEY) === 'USD') cur = 'USD'; } catch (e) {} }
   const conv = v => cur === 'SAR' ? v * SAR_RATE : v;
 
+  // Metal: gold (default) or silver. ?metal=gold|silver wins, else the viewer's last choice.
+  const METAL_KEY = 'gold-widget-metal';
+  let metal = 'gold';
+  const qm = (q.get('metal') || '').toLowerCase();
+  if (qm === 'gold' || qm === 'silver') metal = qm;
+  else { try { if (localStorage.getItem(METAL_KEY) === 'silver') metal = 'silver'; } catch (e) {} }
+
   // Language: English (default) or Arabic (right-to-left, Western digits). ?lang=ar|en wins, else last choice.
   const LANG_KEY = 'gold-widget-lang';
   const T = {
@@ -212,22 +226,31 @@
           size: 'Size', priceCol: 'Price', note: 'Chart based on PAX Gold, a digital token backed by real gold, so it follows the gold price closely',
           rngTitle: ['Past 7 days', 'Past 30 days', 'Past year'], rngShort: ['7D', '30D', '1Y'],
           USD: 'USD', SAR: 'SAR', hi: 'H', lo: 'L', stale: 'stale', noPrice: 'Price unavailable', noChart: 'Chart unavailable',
-          sizes: ['1 g', '1 oz (31.10 g)', '1 kg'], locale: 'en-GB' },
+          sizes: ['1 g', '1 oz (31.10 g)', '1 kg'], locale: 'en-GB',
+          mGold: 'Gold', mSilver: 'Silver', doc: 'Gold Price', chartLabel: 'Gold price chart',
+          // silver versions of the metal-specific texts (key + '_silver')
+          title_silver: 'Silver', unit_silver: 'Spot price · per troy ounce · 999 fine', bullionNote_silver: '999 fine · spot value, no premium',
+          doc_silver: 'Silver Price', chartLabel_silver: 'Silver price chart' },
     ar: { title: 'الذهب', unit: 'السعر الفوري · للأونصة · نقاوة 999.9', loading: 'جارٍ التحميل…', bullion: 'السبائك', bullionNote: 'نقاوة 999.9 · قيمة فورية، بدون رسوم',
           size: 'الوزن', priceCol: 'السعر', note: 'الرسم مبني على PAX Gold، وهو رمز رقمي مغطّى بذهب حقيقي، لذا يتبع سعر الذهب عن قرب',
           rngTitle: ['آخر 7 أيام', 'آخر 30 يوماً', 'آخر سنة'], rngShort: ['7 أيام', '30 يوماً', 'سنة'],
           USD: 'دولار', SAR: 'ريال', hi: 'أعلى', lo: 'أدنى', stale: 'غير محدّث', noPrice: 'السعر غير متاح', noChart: 'الرسم غير متاح',
-          sizes: ['1 غرام', '1 أونصة (31.10 غرام)', '1 كيلو'], locale: 'ar-u-nu-latn-ca-gregory' },
+          sizes: ['1 غرام', '1 أونصة (31.10 غرام)', '1 كيلو'], locale: 'ar-u-nu-latn-ca-gregory',
+          mGold: 'ذهب', mSilver: 'فضة', doc: 'سعر الذهب', chartLabel: 'رسم سعر الذهب',
+          title_silver: 'الفضة', unit_silver: 'السعر الفوري · للأونصة · نقاوة 999', bullionNote_silver: 'نقاوة 999 · قيمة فورية، بدون رسوم',
+          doc_silver: 'سعر الفضة', chartLabel_silver: 'رسم سعر الفضة' },
   };
   let lang = 'en';
   const ql = (q.get('lang') || '').toLowerCase();
   if (ql === 'ar' || ql === 'en') lang = ql;
   else { try { if (localStorage.getItem(LANG_KEY) === 'ar') lang = 'ar'; } catch (e) {} }
-  const t = k => T[lang][k];
+  // Text for the current language; a silver-specific version (key_silver) wins when silver is shown.
+  const t = k => (metal === 'silver' && T[lang][k + '_silver'] !== undefined) ? T[lang][k + '_silver'] : T[lang][k];
   function applyLang() {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-    document.title = lang === 'ar' ? 'سعر الذهب' : 'Gold Price';
+    document.title = t('doc');
+    $('wk-svg').setAttribute('aria-label', t('chartLabel'));
     document.querySelectorAll('[data-i18n]').forEach(el => {
       if (el.id === 'time' && el.dataset.filled) return;   // time is filled by render
       el.textContent = t(el.dataset.i18n);
@@ -313,24 +336,33 @@
     $('card').classList.add('on');
   }
 
-  async function update() {
-    const last = load(GOLD_KEY);
+  // Both metals are fetched every time, so switching is instant; only the shown metal is drawn.
+  const shown = {};                                             // metal -> [price, stale]
+  function showPrice() {
+    if (shown[metal]) render(...shown[metal]);
+    else { lastShown = null; $('price').textContent = '--'; $('bars-body').innerHTML = ''; $('chg').textContent = '—'; $('time').textContent = t('noPrice'); }
+  }
+  async function updateMetal(m) {
+    const M = METALS[m], last = load(M.key);
     try {
-      // Step 1: spot gold in USD per ounce.
-      const g = await fetchJson(GOLD_URL);
+      // Step 1: spot price in USD per ounce.
+      const g = await fetchJson(M.url);
       if (typeof g.price !== 'number' || !(g.price > 0)) throw new Error('bad price');
       const at = g.updatedAt ? Date.parse(g.updatedAt) : Date.now();
       // Keep the previous comparison point when the source hasn't moved to a new quote yet.
       const prev = last ? (last.at === at ? last.prev : last.usd) : null;
       const p = { usd: g.price, at, prev };
-      save(GOLD_KEY, p);
-      render(p, false);
+      save(M.key, p);
+      shown[m] = [p, false];
     } catch (e) {
       // Step 4: keep the last known price on screen and mark it stale.
-      if (last) render(last, true);
-      else $('time').textContent = t('noPrice');
-      $('card').classList.add('on');
+      if (last) shown[m] = [last, true];
     }
+  }
+  async function update() {
+    await Promise.all(Object.keys(METALS).map(updateMetal));
+    showPrice();
+    $('card').classList.add('on');
   }
 
   // ---- History chart: spot prices from history.json (PAXG candles from Binance as fallback), rotating 7 days -> 30 days -> 1 year ----
@@ -344,8 +376,9 @@
     { id: '1y',  interval: '1d', ms: 24 * HOUR, n: 365, maxAge: 30 * MIN, tick: 'month' },   // daily
   ];
   const ROTATE_MS = 10 * 1000;
-  const data = {};
-  RANGES.forEach(r => { data[r.id] = load('gold-widget-range-' + r.id + '-v1'); });
+  const data = {};                                              // metal -> range id -> chart data
+  const rangeKey = (m, id) => 'gold-widget-range-' + id + METALS[m].rangeKey;
+  Object.keys(METALS).forEach(m => { data[m] = {}; RANGES.forEach(r => { data[m][r.id] = load(rangeKey(m, r.id)); }); });
   let ri = 0, paused = false;
 
   const fmt = (ts, o) => new Date(ts).toLocaleString(t('locale'), Object.assign({ timeZone: 'Asia/Riyadh' }, o));
@@ -374,19 +407,21 @@
   const candles = k => ({ t: k.map(x => x[6] + 1), o: k.map(x => +x[1]), h: k.map(x => +x[2]), l: k.map(x => +x[3]), c: k.map(x => +x[4]) });
   const WINDOW = { '7d': 7 * 24 * HOUR, '30d': 31 * 24 * HOUR, '1y': 366 * 24 * HOUR };
 
-  async function loadRange(r, force) {
-    const cached = data[r.id];
+  async function loadRange(m, r, force) {
+    const cached = data[m][r.id];
     if (!force && cached && Date.now() - cached.at < r.maxAge) return;
     try {
-      // t = end of each period
-      const base = hist && hist.ranges[r.id];
+      // t = end of each period. Gold sits at the top level of history.json, silver under "silver".
+      const src = hist && (m === 'gold' ? hist : hist.silver);
+      const base = src && src.ranges && src.ranges[r.id];
       const spot = !!(base && base.src && base.src !== 'paxg');
+      if (m !== 'gold' && !(base && base.t && base.t.length > 1)) return;   // silver: no live fallback, keep the last data
       let s;
       if (base && base.t && base.t.length > 1) {
         s = { t: base.t.slice(), o: base.o.slice(), h: base.h.slice(), l: base.l.slice(), c: base.c.slice() };
         if (spot) {
           // Spot history: add the live spot price as the newest point.
-          const p = load(GOLD_KEY), lastT = s.t[s.t.length - 1];
+          const p = load(METALS[m].key), lastT = s.t[s.t.length - 1];
           if (p && p.usd > 0 && p.at > lastT) ['t', 'o', 'h', 'l', 'c'].forEach(f => s[f].push(f === 't' ? p.at : p.usd));
         } else {
           // PAXG history: top up with the Binance candles since the file was written.
@@ -409,12 +444,12 @@
       ['t', 'o', 'h', 'l', 'c'].forEach(f => { s[f] = s[f].slice(from); });
       if (s.t.length < 2 || s.c.some(v => !(v > 0))) throw new Error('bad data');
       const w = { t: s.t, c: s.c, open: s.o[0], hi: Math.max(...s.h), lo: Math.min(...s.l), at: Date.now() };
-      data[r.id] = w; save('gold-widget-range-' + r.id + '-v1', w);
+      data[m][r.id] = w; save(rangeKey(m, r.id), w);
     } catch (e) { /* keep the last data for this range */ }
   }
   async function loadRanges(force) {
     await loadHistory();
-    await Promise.all(RANGES.map(r => loadRange(r, force)));
+    await Promise.all(Object.keys(METALS).flatMap(m => RANGES.map(r => loadRange(m, r, force))));
     drawChart();
   }
 
@@ -440,7 +475,7 @@
   let pts = [];
   function drawChart() {
     markRange();
-    const svg = $('wk-svg'), r = RANGES[ri], week = data[r.id];
+    const svg = $('wk-svg'), r = RANGES[ri], week = data[metal][r.id];
     if (!week) { $('wk-chg').textContent = t('noChart'); $('wk-hl').textContent = ''; svg.innerHTML = ''; pts = []; return; }
     const last = week.c[week.c.length - 1], d = last - week.open, pct = d / week.open * 100;
     const chg = $('wk-chg');
@@ -462,7 +497,9 @@
     let grid = '';
     [max - (max - min) * .08 / 1.16, (max + min) / 2, min + (max - min) * .08 / 1.16].forEach(v => {
       const yy = y(v).toFixed(1);
-      grid += `<line class="grid" x1="0" x2="${W - padR}" y1="${yy}" y2="${yy}"/><text class="ylab" x="${W - padR + 6}" y="${(+yy + 4).toFixed(1)}">${Math.round(v).toLocaleString('en-US')}</text>`;
+      // whole numbers for gold; silver's smaller prices keep 2 decimals so the labels stay distinct
+      const lab = v < 1000 ? v.toFixed(2) : Math.round(v).toLocaleString('en-US');
+      grid += `<line class="grid" x1="0" x2="${W - padR}" y1="${yy}" y2="${yy}"/><text class="ylab" x="${W - padR + 6}" y="${(+yy + 4).toFixed(1)}">${lab}</text>`;
     });
     let xl = '', lastLab = -1e9;
     const key = tickKey[r.tick], label = tickLabel[r.tick];
@@ -528,10 +565,12 @@
       try { localStorage.setItem(key, get()); } catch (e) {}
       mark();
       applyLang();
-      if (lastShown) render(...lastShown);
+      if (attr === 'metal') showPrice();
+      else if (lastShown) render(...lastShown);
       drawChart();
     }));
   }
+  wireSwitch('metal', () => metal, v => { metal = v; }, METAL_KEY);
   wireSwitch('cur', () => cur, v => { cur = v; }, CUR_KEY);
   wireSwitch('lang', () => lang, v => { lang = v; }, LANG_KEY);
   let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawChart, 150); });
