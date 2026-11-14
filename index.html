@@ -43,6 +43,7 @@
   .wk-stats > span { white-space: nowrap; }
   .rs { display: inline-block; width: .82em; height: .9em; fill: currentColor; vertical-align: -.08em; margin-inline-end: .14em; }
   .amt { white-space: nowrap; }
+  .ds { margin-inline-end: .06em; }
   [dir="rtl"] .wk-note, [dir="rtl"] .unit { line-height: 1.5; }
   .val.out { opacity: 0; }
 
@@ -175,9 +176,9 @@
   const load = k => { if (mem[k]) return mem[k]; try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
   const save = (k, v) => { mem[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
   const money = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  // Amount as HTML: in SAR mode the new Saudi Riyal sign sits right before the number (kept left-to-right).
+  // Amount as HTML: the currency sign (new Saudi Riyal sign or $) sits right before the number, kept left-to-right.
   const RIYAL = '<svg class="rs" aria-label="SAR" role="img"><use href="#riyal-sign"/></svg>';
-  const amt = n => cur === 'SAR' ? `<bdi dir="ltr" class="amt">${RIYAL}${money(n)}</bdi>` : money(n);
+  const amt = n => `<bdi dir="ltr" class="amt">${cur === 'SAR' ? RIYAL : '<span class="ds">$</span>'}${money(n)}</bdi>`;
   const clock = ts => new Date(ts).toLocaleString(t('locale'), { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
 
   async function fetchJson(url) {
