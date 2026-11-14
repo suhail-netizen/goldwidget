@@ -78,7 +78,10 @@
   .head { display: flex; justify-content: center; margin-top: 1.1em; padding-top: .9em; border-top: 1px solid var(--line); }
   .title { font-family: var(--font-display); font-size: 2em; font-weight: 500; line-height: 1.15; color: var(--gold-ink); }
   [dir="rtl"] .title { font-family: var(--font-ar-display); font-size: 1.9em; line-height: 1.5; }   /* Alexandria; never letter-space Arabic */
-  [data-metal="silver"] .title { color: var(--silver-ink); }
+  /* Silver view: every title in silver (main title, section titles, chosen chart range) */
+  [data-metal="silver"] .title, [data-metal="silver"] .bars caption span, [data-metal="silver"] .wk-title,
+  [data-metal="silver"] .rng button.on { color: var(--silver-ink); }
+  [data-metal="silver"] .rng button.on { border-color: var(--silver-ink); }
   .unit { text-align: center; font-size: .82em; color: var(--ink-muted); margin-top: .2em; }
 
   .row { display: flex; justify-content: center; align-items: baseline; margin-top: .3em; font-variant-numeric: tabular-nums; }
