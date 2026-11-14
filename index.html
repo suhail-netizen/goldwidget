@@ -36,7 +36,7 @@
   .row { display: flex; justify-content: space-between; align-items: baseline; margin-top: .45em; font-variant-numeric: tabular-nums; }
   .row .cur { font-size: 1.3em; color: #dde3ea; font-weight: 600; }
   .row .val { font-size: 3em; font-weight: 600; line-height: 1.05; transition: opacity .4s ease; }
-  .row.sar .val { font-size: 2.4em; }
+  .tog-row { display: flex; justify-content: center; margin-top: .55em; }
   .val.out { opacity: 0; }
 
   .foot { display: flex; justify-content: space-between; align-items: baseline; font-size: 1.2em; color: #dde3ea; border-top: 1px solid rgba(255,255,255,.16); padding-top: .5em; margin-top: .5em; font-variant-numeric: tabular-nums; }
@@ -77,7 +77,7 @@
   .tip { position: absolute; top: 0; pointer-events: none; background: rgba(5,10,18,.95); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; padding: .3em .55em; font-size: .8em; white-space: nowrap; color: #f2f4f7; text-shadow: none; opacity: 0; transition: opacity .15s; font-variant-numeric: tabular-nums; }
   .tip small { display: block; color: #8d9bab; }
   .wk-note { margin-top: .3em; font-size: .75em; color: #8d9bab; }
-  html.obs .tog { display: none; }
+  html.obs .tog-row { display: none; }
 </style>
 </head>
 <body>
@@ -85,19 +85,16 @@
 <div id="card">
   <div class="head"><div class="title">Gold<span>الذهب</span></div></div>
   <div class="unit">Spot price · per troy ounce</div>
-  <div class="row usd"><span class="cur">USD</span><span class="val" id="usd">--</span></div>
-  <div class="row sar"><span class="cur">SAR</span><span class="val" id="sar">--</span></div>
+  <div class="tog-row"><div class="tog" role="group" aria-label="Currency"><button type="button" data-cur="USD">USD</button><button type="button" data-cur="SAR">SAR</button></div></div>
+  <div class="row"><span class="cur" id="cur-l">SAR</span><span class="val" id="price">--</span></div>
   <div class="foot"><span id="chg">—</span><span id="time">Loading…</span></div>
   <table class="bars" id="bars">
     <caption>Bullion<small>24K spot value, no premium</small></caption>
-    <thead><tr><th>Size</th><th>USD</th><th>SAR</th></tr></thead>
+    <thead><tr><th>Size</th><th id="bars-cur">SAR</th></tr></thead>
     <tbody id="bars-body"></tbody>
   </table>
   <div class="wk">
-    <div class="wk-head">
-      <span class="wk-title">Past 7 days</span>
-      <div class="tog" role="group" aria-label="Chart currency"><button type="button" data-cur="USD" class="on">USD</button><button type="button" data-cur="SAR">SAR</button></div>
-    </div>
+    <div class="wk-head"><span class="wk-title">Past 7 days</span></div>
     <div class="wk-stats"><span id="wk-chg">—</span><span id="wk-hl"></span></div>
     <div class="chart" id="chart"><svg id="wk-svg" role="img" aria-label="Gold price, past 7 days"></svg><div class="tip" id="tip"></div></div>
     <div class="wk-note">Hourly · PAX Gold (PAXG), a token backed by 1 oz of gold — tracks spot closely</div>
@@ -122,6 +119,14 @@
   const BARS = [['1 g', 1], ['2.5 g', 2.5], ['5 g', 5], ['1 oz', GRAMS_PER_OZ], ['100 g', 100], ['1 kg', 1000]];
   const $ = id => document.getElementById(id);
 
+  // One currency for the whole page. Default SAR; ?cur=USD|SAR wins, else the viewer's last choice.
+  const CUR_KEY = 'gold-widget-cur';
+  let cur = 'SAR';
+  const qc = (q.get('cur') || '').toUpperCase();
+  if (qc === 'USD' || qc === 'SAR') cur = qc;
+  else { try { if (localStorage.getItem(CUR_KEY) === 'USD') cur = 'USD'; } catch (e) {} }
+  const conv = v => cur === 'SAR' ? v * SAR_RATE : v;
+
   // Memory copy first, so change/stale still work where browser storage is blocked.
   const mem = {};
   const load = k => { if (mem[k]) return mem[k]; try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
@@ -135,26 +140,29 @@
     return r.json();
   }
 
-  // Show both prices, change since the previous refresh, and time of the price.
+  // Show the price in the selected currency, change since the previous refresh, and time of the price.
   // SAR = unrounded USD x 3.76; every value is rounded to 2 decimals only when displayed.
+  let lastShown = null;
   function render(p, stale) {
-    const usd = $('usd'), sar = $('sar'), bars = $('bars');
-    usd.classList.add('out'); sar.classList.add('out'); bars.classList.add('out');
+    lastShown = [p, stale];
+    const price = $('price'), bars = $('bars');
+    price.classList.add('out'); bars.classList.add('out');
     setTimeout(() => {
-      usd.textContent = money(p.usd);
-      sar.textContent = money(p.usd * SAR_RATE);
-      // Bullion table: grams x (spot / grams per ounce), in USD and SAR.
+      $('cur-l').textContent = cur;
+      $('bars-cur').textContent = cur;
+      price.textContent = money(conv(p.usd));
+      // Bullion table: grams x (spot / grams per ounce).
       const perGram = p.usd / GRAMS_PER_OZ;
       $('bars-body').innerHTML = BARS.map(([label, g]) =>
-        `<tr><td>${label}</td><td>${money(g * perGram)}</td><td>${money(g * perGram * SAR_RATE)}</td></tr>`).join('');
-      usd.classList.remove('out'); sar.classList.remove('out'); bars.classList.remove('out');
+        `<tr><td>${label}</td><td>${money(conv(g * perGram))}</td></tr>`).join('');
+      price.classList.remove('out'); bars.classList.remove('out');
     }, 400);
     const chg = $('chg');
     chg.className = '';
     if (p.prev != null && p.prev > 0) {
       const d = p.usd - p.prev, pct = d / p.prev * 100;
       const sign = d > 0 ? '▲ +' : d < 0 ? '▼ −' : '';
-      chg.textContent = d === 0 ? '0.00 (0.00%)' : `${sign}${money(Math.abs(d))} (${Math.abs(pct).toFixed(2)}%)`;
+      chg.textContent = d === 0 ? '0.00 (0.00%)' : `${sign}${money(Math.abs(conv(d)))} (${Math.abs(pct).toFixed(2)}%)`;
       if (d > 0) chg.classList.add('up'); else if (d < 0) chg.classList.add('down');
     } else {
       chg.textContent = '—';
@@ -186,10 +194,8 @@
 
   // ---- Past-week chart: hourly PAXG candles from Binance (free, no key) ----
   const WEEK_URL = 'https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=1h&limit=168';
-  const WEEK_KEY = 'gold-widget-week-v1', CUR_KEY = 'gold-widget-cur';
-  let week = load(WEEK_KEY), cur = 'USD';
-  try { if (localStorage.getItem(CUR_KEY) === 'SAR') cur = 'SAR'; } catch (e) {}
-  const conv = v => cur === 'SAR' ? v * SAR_RATE : v;
+  const WEEK_KEY = 'gold-widget-week-v1';
+  let week = load(WEEK_KEY);
   const dayName = t => new Date(t).toLocaleDateString('en-GB', { timeZone: 'Asia/Riyadh', weekday: 'short' });
   const riyadhHour = t => +new Date(t).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', hour12: false });
   const tipTime = t => new Date(t).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -278,13 +284,16 @@
   chartEl.addEventListener('pointerdown', hover);
   chartEl.addEventListener('pointerleave', unhover);
 
-  // USD | SAR switch (remembered per viewer).
+  // USD | SAR switch for the whole page (remembered per viewer).
   document.querySelectorAll('.tog button').forEach(b => {
     b.classList.toggle('on', b.dataset.cur === cur);
+    b.setAttribute('aria-pressed', b.dataset.cur === cur);
     b.addEventListener('click', () => {
+      if (cur === b.dataset.cur) return;
       cur = b.dataset.cur;
       try { localStorage.setItem(CUR_KEY, cur); } catch (e) {}
-      document.querySelectorAll('.tog button').forEach(o => o.classList.toggle('on', o === b));
+      document.querySelectorAll('.tog button').forEach(o => { o.classList.toggle('on', o === b); o.setAttribute('aria-pressed', o === b); });
+      if (lastShown) render(...lastShown);
       drawWeek();
     });
   });
