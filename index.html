@@ -85,6 +85,12 @@
   .tip { position: absolute; top: 0; pointer-events: none; background: rgba(5,10,18,.95); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; padding: .3em .55em; font-size: .8em; white-space: nowrap; color: #f2f4f7; text-shadow: none; opacity: 0; transition: opacity .15s; font-variant-numeric: tabular-nums; }
   .tip small { display: block; color: #8d9bab; }
   .wk-note { margin-top: .3em; font-size: .75em; color: #8d9bab; }
+  #wk-body { transition: opacity .3s ease; }
+  #wk-body.out { opacity: 0; }
+  .rng { display: inline-flex; gap: 2px; }
+  .rng button { font: inherit; font-size: .75em; font-weight: 600; color: #8d9bab; background: none; border: 1px solid transparent; border-radius: 999px; padding: .1em .55em; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .rng button.on { color: var(--accent); border-color: var(--accent); }
+  .rng button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   html.obs .tog-row { display: none; }
 </style>
 </head>
@@ -110,9 +116,14 @@
     <tbody id="bars-body"></tbody>
   </table>
   <div class="wk">
-    <div class="wk-head"><span class="wk-title" data-i18n="week">Past 7 days</span></div>
-    <div class="wk-stats"><span id="wk-chg" dir="ltr">—</span><span id="wk-hl"></span></div>
-    <div class="chart" id="chart"><svg id="wk-svg" role="img" aria-label="Gold price, past 7 days"></svg><div class="tip" id="tip"></div></div>
+    <div class="wk-head">
+      <span class="wk-title" id="wk-title">Past 7 days</span>
+      <div class="rng" role="group" aria-label="Chart range"><button type="button">7D</button><button type="button">30D</button><button type="button">1Y</button></div>
+    </div>
+    <div id="wk-body">
+      <div class="wk-stats"><span id="wk-chg" dir="ltr">—</span><span id="wk-hl"></span></div>
+      <div class="chart" id="chart"><svg id="wk-svg" role="img" aria-label="Gold price chart"></svg><div class="tip" id="tip"></div></div>
+    </div>
     <div class="wk-note" data-i18n="note">Hourly · PAX Gold (PAXG), a token backed by 1 oz of gold — tracks spot closely</div>
   </div>
 </div>
@@ -147,11 +158,13 @@
   const LANG_KEY = 'gold-widget-lang';
   const T = {
     en: { unit: 'Spot price · per troy ounce', loading: 'Loading…', bullion: 'Bullion', bullionNote: '24K spot value, no premium',
-          size: 'Size', week: 'Past 7 days', note: 'Hourly · PAX Gold (PAXG), a token backed by 1 oz of gold — tracks spot closely',
+          size: 'Size', note: 'PAX Gold (PAXG), a token backed by 1 oz of gold — tracks spot closely',
+          rngTitle: ['Past 7 days', 'Past 30 days', 'Past year'], rngShort: ['7D', '30D', '1Y'],
           USD: 'USD', SAR: 'SAR', hi: 'H', lo: 'L', stale: 'stale', noPrice: 'Price unavailable', noChart: 'Chart unavailable',
           sizes: ['1 g', '1 oz (31.10 g)', '1 kg'], locale: 'en-GB' },
     ar: { unit: 'السعر الفوري · للأونصة', loading: 'جارٍ التحميل…', bullion: 'السبائك', bullionNote: 'قيمة فورية عيار 24، بدون رسوم',
-          size: 'الوزن', week: 'آخر 7 أيام', note: 'كل ساعة · PAX Gold (PAXG)، رمز مغطّى بأونصة ذهب — يتبع السعر الفوري عن قرب',
+          size: 'الوزن', note: 'PAX Gold (PAXG)، رمز مغطّى بأونصة ذهب — يتبع السعر الفوري عن قرب',
+          rngTitle: ['آخر 7 أيام', 'آخر 30 يوماً', 'آخر سنة'], rngShort: ['7 أيام', '30 يوماً', 'سنة'],
           USD: 'دولار', SAR: 'ريال', hi: 'أعلى', lo: 'أدنى', stale: 'غير محدّث', noPrice: 'السعر غير متاح', noChart: 'الرسم غير متاح',
           sizes: ['1 غرام', '1 أونصة (31.10 غرام)', '1 كيلو'], locale: 'ar-u-nu-latn-ca-gregory' },
   };
@@ -240,31 +253,72 @@
     }
   }
 
-  // ---- Past-week chart: hourly PAXG candles from Binance (free, no key) ----
-  const WEEK_URL = 'https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=1h&limit=168';
-  const WEEK_KEY = 'gold-widget-week-v1';
-  let week = load(WEEK_KEY);
-  const dayName = ts => new Date(ts).toLocaleDateString(t('locale'), { timeZone: 'Asia/Riyadh', weekday: 'short' });
-  const riyadhHour = ts => +new Date(ts).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', hour12: false });
-  const tipTime = ts => new Date(ts).toLocaleString(t('locale'), { timeZone: 'Asia/Riyadh', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  // ---- History chart: PAXG candles from Binance (free, no key), rotating 7 days -> 30 days -> 1 year ----
+  const KLINES = 'https://api.binance.com/api/v3/klines?symbol=PAXGUSDT';
+  const MIN = 60 * 1000, RIYADH_OFFSET = 3 * 60 * MIN;          // Riyadh is UTC+3 all year
+  const RANGES = [
+    { id: '7d',  q: '&interval=1h&limit=168', maxAge: 5 * MIN,  tick: 'day'   },   // hourly
+    { id: '30d', q: '&interval=4h&limit=180', maxAge: 30 * MIN, tick: 'week'  },   // every 4 hours
+    { id: '1y',  q: '&interval=1d&limit=365', maxAge: 30 * MIN, tick: 'month' },   // daily
+  ];
+  const ROTATE_MS = 10 * 1000;
+  const data = {};
+  RANGES.forEach(r => { data[r.id] = load('gold-widget-range-' + r.id + '-v1'); });
+  let ri = 0, paused = false;
 
-  async function loadWeek() {
+  const fmt = (ts, o) => new Date(ts).toLocaleString(t('locale'), Object.assign({ timeZone: 'Asia/Riyadh' }, o));
+  const dayNum = ts => Math.floor((ts + RIYADH_OFFSET) / 86400000);
+  // Tick key per point: a new tick starts where the key changes.
+  const tickKey = { day: ts => dayNum(ts), week: ts => Math.floor((dayNum(ts) + 4) / 7),   // weeks start Sunday
+                    month: ts => fmt(ts, { year: 'numeric', month: 'numeric' }) };
+  const tickLabel = { day: ts => fmt(ts, { weekday: 'short' }), week: ts => fmt(ts, { day: 'numeric', month: 'short' }),
+                      month: ts => fmt(ts, { month: 'short' }) };
+  const tipFmt = { '7d': { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
+                   '30d': { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
+                   '1y': { day: 'numeric', month: 'short', year: 'numeric' } };
+
+  async function loadRange(r, force) {
+    const cached = data[r.id];
+    if (!force && cached && Date.now() - cached.at < r.maxAge) return;
     try {
-      const k = await fetchJson(WEEK_URL);
+      const k = await fetchJson(KLINES + r.q);
       if (!Array.isArray(k) || k.length < 2) throw new Error('no data');
       // [openTime, open, high, low, close, volume, closeTime, ...]
-      const w = { t: k.map(r => r[6] + 1), c: k.map(r => +r[4]), open: +k[0][1],
-                  hi: Math.max(...k.map(r => +r[2])), lo: Math.min(...k.map(r => +r[3])) };
+      const w = { t: k.map(x => x[6] + 1), c: k.map(x => +x[4]), open: +k[0][1],
+                  hi: Math.max(...k.map(x => +x[2])), lo: Math.min(...k.map(x => +x[3])), at: Date.now() };
       if (w.c.some(v => !(v > 0))) throw new Error('bad data');
-      week = w; save(WEEK_KEY, w);
-    } catch (e) { /* keep the last chart */ }
-    drawWeek();
+      data[r.id] = w; save('gold-widget-range-' + r.id + '-v1', w);
+    } catch (e) { /* keep the last data for this range */ }
+  }
+  async function loadRanges(force) {
+    await Promise.all(RANGES.map(r => loadRange(r, force)));
+    drawChart();
   }
 
+  // Range indicator: 7D · 30D · 1Y (tap to jump).
+  function markRange() {
+    document.querySelectorAll('.rng button').forEach((b, i) => {
+      b.textContent = t('rngShort')[i];
+      b.classList.toggle('on', i === ri);
+      b.setAttribute('aria-pressed', i === ri);
+    });
+    $('wk-title').textContent = t('rngTitle')[ri];
+  }
+  let rotTimer;
+  function showRange(i) {
+    const body = $('wk-body');
+    body.classList.add('out');
+    setTimeout(() => { ri = i; drawChart(); body.classList.remove('out'); }, 300);
+    clearInterval(rotTimer);
+    rotTimer = setInterval(() => { if (!paused) showRange((ri + 1) % RANGES.length); }, ROTATE_MS);
+  }
+  document.querySelectorAll('.rng button').forEach((b, i) => b.addEventListener('click', () => { if (i !== ri) showRange(i); }));
+
   let pts = [];
-  function drawWeek() {
-    const svg = $('wk-svg');
-    if (!week) { $('wk-chg').textContent = t('noChart'); svg.innerHTML = ''; return; }
+  function drawChart() {
+    markRange();
+    const svg = $('wk-svg'), r = RANGES[ri], week = data[r.id];
+    if (!week) { $('wk-chg').textContent = t('noChart'); $('wk-hl').textContent = ''; svg.innerHTML = ''; pts = []; return; }
     const last = week.c[week.c.length - 1], d = last - week.open, pct = d / week.open * 100;
     const chg = $('wk-chg');
     chg.className = d > 0 ? 'up' : d < 0 ? 'down' : '';
@@ -286,12 +340,17 @@
       const yy = y(v).toFixed(1);
       grid += `<line class="grid" x1="0" x2="${W - padR}" y1="${yy}" y2="${yy}"/><text class="ylab" x="${W - padR + 6}" y="${(+yy + 4).toFixed(1)}">${Math.round(v).toLocaleString('en-US')}</text>`;
     });
-    let xl = '';
+    let xl = '', lastLab = -1e9;
+    const key = tickKey[r.tick], label = tickLabel[r.tick];
+    const minGap = lang === 'ar' ? 40 : 30;              // skip labels that would collide
     for (let i = 1; i < n; i++) {
-      if (riyadhHour(week.t[i]) === 0) {           // Riyadh midnight -> day tick
+      if (key(week.t[i]) !== key(week.t[i - 1])) {
         const xx = x(i).toFixed(1);
         xl += `<line class="grid" x1="${xx}" x2="${xx}" y1="${padT}" y2="${base}"/>`;
-        if (x(i) < W - padR - 14) xl += `<text class="xlab" x="${(x(i) + 3).toFixed(1)}" y="${H - 4}">${dayName(week.t[i])}</text>`;
+        if (x(i) - lastLab >= minGap && x(i) < W - padR - 14) {
+          xl += `<text class="xlab" x="${(x(i) + 3).toFixed(1)}" y="${H - 4}">${label(week.t[i])}</text>`;
+          lastLab = x(i);
+        }
       }
     }
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -315,7 +374,7 @@
     const cross = $('wk-cross'), dot = $('wk-dot');
     cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
     dot.setAttribute('cx', px); dot.setAttribute('cy', py);
-    tip.innerHTML = `<span dir="auto">${t(cur)} <bdi>${amt(v)}</bdi></span><small dir="auto">${tipTime(ts)}</small>`;
+    tip.innerHTML = `<span dir="auto">${t(cur)} <bdi>${amt(v)}</bdi></span><small dir="auto">${fmt(ts, tipFmt[RANGES[ri].id])}</small>`;
     const tw = tip.offsetWidth;
     tip.style.left = Math.max(0, Math.min(r.width - tw, px - tw / 2)) + 'px';
     tip.style.top = (py > 50 ? py - 46 : py + 12) + 'px';
@@ -329,8 +388,9 @@
     $('wk-dot').setAttribute('cx', last[0]); $('wk-dot').setAttribute('cy', last[1]);
   }
   chartEl.addEventListener('pointermove', hover);
-  chartEl.addEventListener('pointerdown', hover);
-  chartEl.addEventListener('pointerleave', unhover);
+  chartEl.addEventListener('pointerdown', e => { paused = true; hover(e); });
+  chartEl.addEventListener('pointerenter', () => { paused = true; });
+  chartEl.addEventListener('pointerleave', () => { paused = false; unhover(); });
 
   // USD | SAR switch for the whole page (remembered per viewer).
   function wireSwitch(attr, get, set, key) {
@@ -344,15 +404,17 @@
       mark();
       applyLang();
       if (lastShown) render(...lastShown);
-      drawWeek();
+      drawChart();
     }));
   }
   wireSwitch('cur', () => cur, v => { cur = v; }, CUR_KEY);
   wireSwitch('lang', () => lang, v => { lang = v; }, LANG_KEY);
-  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawWeek, 150); });
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawChart, 150); });
 
-  update(); loadWeek();
-  setInterval(() => { update(); loadWeek(); }, REFRESH_MS);
+  update(); drawChart(); loadRanges(true);
+  showRange(0);
+  // Every 5 min: spot price; each chart range refreshes only once its data is older than its maxAge.
+  setInterval(() => { update(); loadRanges(false); }, REFRESH_MS);
 })();
 </script>
 </body>
