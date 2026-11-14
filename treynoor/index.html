@@ -208,7 +208,8 @@
   const REFRESH_MS = 5 * 60 * 1000;                            // every 5 minutes
   const SAR_RATE = 3.76;                                        // fixed: 1 USD = 3.76 SAR
   const GRAMS_PER_OZ = 31.1034768;                              // troy ounce
-  const BARS = [['1 g', 1], ['1 oz', GRAMS_PER_OZ], ['1 kg', 1000]];
+  // Bullion sizes in grams (labels in T.sizes / T.sizes_silver, same order).
+  const BARS = { gold: [1, GRAMS_PER_OZ, 1000], silver: [GRAMS_PER_OZ, 10 * GRAMS_PER_OZ, 1000, 100 * GRAMS_PER_OZ] };   // smallest to largest
   const $ = id => document.getElementById(id);
 
   // One currency for the whole page. Default SAR; ?cur=USD|SAR wins, else the viewer's last choice.
@@ -237,7 +238,8 @@
           mGold: 'Gold', mSilver: 'Silver', doc: 'Gold Price', chartLabel: 'Gold price chart',
           // silver versions of the metal-specific texts (key + '_silver')
           title_silver: 'Silver', unit_silver: 'Spot price · per troy ounce · 999 fine', bullionNote_silver: '999 fine · spot value, no premium',
-          doc_silver: 'Silver Price', chartLabel_silver: 'Silver price chart' },
+          doc_silver: 'Silver Price', chartLabel_silver: 'Silver price chart',
+          sizes_silver: ['1 oz (31.10 g)', '10 oz (311.03 g)', '1 kg', '100 oz (3.11 kg)'] },
     ar: { title: 'الذهب', unit: 'السعر الفوري · للأونصة · نقاوة 999.9', loading: 'جارٍ التحميل…', bullion: 'السبائك', bullionNote: 'نقاوة 999.9 · قيمة فورية، بدون رسوم',
           size: 'الوزن', priceCol: 'السعر', note: 'الرسم مبني على PAX Gold، وهو رمز رقمي مغطّى بذهب حقيقي، لذا يتبع سعر الذهب عن قرب',
           rngTitle: ['آخر 7 أيام', 'آخر 30 يوماً', 'آخر سنة'], rngShort: ['7 أيام', '30 يوماً', 'سنة'],
@@ -245,7 +247,8 @@
           sizes: ['1 غرام', '1 أونصة (31.10 غرام)', '1 كيلو'], locale: 'ar-u-nu-latn-ca-gregory',
           mGold: 'ذهب', mSilver: 'فضة', doc: 'سعر الذهب', chartLabel: 'رسم سعر الذهب',
           title_silver: 'الفضة', unit_silver: 'السعر الفوري · للأونصة · نقاوة 999', bullionNote_silver: 'نقاوة 999 · قيمة فورية، بدون رسوم',
-          doc_silver: 'سعر الفضة', chartLabel_silver: 'رسم سعر الفضة' },
+          doc_silver: 'سعر الفضة', chartLabel_silver: 'رسم سعر الفضة',
+          sizes_silver: ['1 أونصة (31.10 غرام)', '10 أونصات (311.03 غرام)', '1 كيلو', '100 أونصة (3.11 كيلو)'] },
   };
   let lang = 'en';
   const ql = (q.get('lang') || '').toLowerCase();
@@ -324,7 +327,7 @@
       price.innerHTML = amt(conv(p.usd));
       // Bullion table: grams x (spot / grams per ounce).
       const perGram = p.usd / GRAMS_PER_OZ, sizes = t('sizes');
-      $('bars-body').innerHTML = BARS.map(([, g], i) =>
+      $('bars-body').innerHTML = BARS[metal].map((g, i) =>
         `<tr><td>${sizes[i]}</td><td>${amt(conv(g * perGram))}</td></tr>`).join('');
       price.classList.remove('out'); bars.classList.remove('out');
     }, 400);
