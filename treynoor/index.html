@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>Gold Price</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
 <link rel="icon" href="treynoor-monogram-gold.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,10 +18,25 @@
     --surface: #12110E; --surface-raised: #1E1C17; --ink: #F4EEE1; --ink-muted: #B3AA98; --line: #3A352B; --on-gold: #16140F;
     --accent: var(--gold-500);
     --up: var(--gold-300); --down: var(--ink-muted);            /* brand: no red/green pairs; arrows carry direction */
+    --chart-line: var(--gold-500); --stale: var(--gold-700); --motif: .07;
+    color-scheme: dark;
     --font-display: "Outfit", "Montserrat", system-ui, sans-serif;
     --font-sans: "Inter", system-ui, sans-serif;
     --font-ar-display: "Alexandria", "Readex Pro", "Noto Kufi Arabic", sans-serif;
     --font-ar: "IBM Plex Sans Arabic", "Noto Sans Arabic", sans-serif;
+  }
+  /* Day theme: chosen by ?theme=light / the switch, or automatically when the device is in light mode. */
+  :root[data-theme="light"] {
+    --gold-ink: #7D5F17; --surface: #FAF7F0; --surface-raised: #F1EBDD; --ink: #16140F; --ink-muted: #5E574B; --line: #DDD3BF;
+    --up: var(--gold-ink); --chart-line: var(--gold-ink); --stale: var(--gold-ink); --motif: .14;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --gold-ink: #7D5F17; --surface: #FAF7F0; --surface-raised: #F1EBDD; --ink: #16140F; --ink-muted: #5E574B; --line: #DDD3BF;
+      --up: var(--gold-ink); --chart-line: var(--gold-ink); --stale: var(--gold-ink); --motif: .14;
+      color-scheme: light;
+    }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
@@ -43,7 +59,7 @@
   #card.on { opacity: 1; transform: none; }
   #card.panel { background: var(--surface-raised); border-color: var(--line); border-top-color: var(--gold-500); }
   /* Motif: the monogram's rays and arcs, cropped off the top corner, low strength */
-  #card.panel::before { content: ""; position: absolute; top: -70px; inset-inline-end: -70px; width: 200px; height: 200px; pointer-events: none; opacity: .07;
+  #card.panel::before { content: ""; position: absolute; top: -70px; inset-inline-end: -70px; width: 200px; height: 200px; pointer-events: none; opacity: var(--motif);
     background: radial-gradient(circle, var(--gold-500) 0 14px, transparent 15px 34px, var(--gold-500) 35px 36px, transparent 37px 56px, var(--gold-500) 57px 58px, transparent 59px 78px, var(--gold-500) 79px 80px, transparent 81px); }
   #card > * { position: relative; }
 
@@ -64,7 +80,7 @@
   .row .val { font-family: var(--font-display); font-size: 3em; font-weight: 500; line-height: 1.1; letter-spacing: .01em; transition: opacity .4s ease; }
   .val.out { opacity: 0; }
   .tog-row { display: flex; justify-content: center; gap: .6em; margin-top: .8em; }
-  #card.old #time::after { content: " • " attr(data-stale); color: var(--gold-700); }
+  #card.old #time::after { content: " • " attr(data-stale); color: var(--stale); }
   .chart { direction: ltr; }
   .wk-stats { flex-wrap: wrap; gap: .15em .8em; }
   .wk-stats > span { white-space: nowrap; }
@@ -107,9 +123,9 @@
   .chart .grid { stroke: var(--line); stroke-width: 1; }
   .chart .ylab, .chart .xlab { fill: var(--ink-muted); font-size: 11px; font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
   [dir="rtl"] .chart .xlab { font-family: var(--font-ar); }
-  .chart .line { fill: none; stroke: var(--gold-500); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart .line { fill: none; stroke: var(--chart-line); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
   .chart .cross { stroke: var(--ink-muted); stroke-width: 1; stroke-dasharray: 2 3; }
-  .chart .dot { fill: var(--gold-500); stroke: var(--surface-raised); stroke-width: 2; }
+  .chart .dot { fill: var(--chart-line); stroke: var(--surface-raised); stroke-width: 2; }
   .tip { position: absolute; top: 0; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 0; padding: .35em .6em; font-size: .8em; white-space: nowrap; color: var(--ink); opacity: 0; transition: opacity .15s; font-variant-numeric: tabular-nums; }
   .tip small { display: block; color: var(--ink-muted); }
   .wk-note { margin-top: .5em; font-size: .72em; color: var(--ink-muted); }
@@ -131,14 +147,15 @@
 
 <div id="card">
   <div class="brand">
-    <span class="en"><img src="treynoor-logo-horizontal-gold.svg" alt="Treynoor"></span>
-    <span class="ar"><img src="treynoor-monogram-gold.svg" alt=""><img class="wm" src="treynoor-wordmark-ar.svg" alt="ترينور"></span>
+    <span class="en"><img data-logo="treynoor-logo-horizontal" src="treynoor-logo-horizontal-gold.svg" alt="Treynoor"></span>
+    <span class="ar"><img data-logo="treynoor-monogram" src="treynoor-monogram-gold.svg" alt=""><img class="wm" data-logo="treynoor-wordmark-ar" src="treynoor-wordmark-ar.svg" alt="ترينور"></span>
   </div>
   <div class="head"><div class="title" data-i18n="title">Gold</div></div>
   <div class="unit" data-i18n="unit">Spot price · per troy ounce</div>
   <div class="tog-row">
     <div class="tog" role="group" aria-label="Currency"><button type="button" data-cur="USD">USD</button><button type="button" data-cur="SAR">SAR</button></div>
     <div class="tog" role="group" aria-label="Language"><button type="button" data-lang="en">EN</button><button type="button" data-lang="ar" lang="ar">ع</button></div>
+    <div class="tog" role="group" aria-label="Theme"><button type="button" data-theme-btn="dark" aria-label="Dark">☾</button><button type="button" data-theme-btn="light" aria-label="Light">☀</button></div>
   </div>
   <div class="row"><span class="val" id="price">--</span></div>
   <div class="foot"><span id="chg" dir="ltr">—</span><span id="time" data-i18n="loading">Loading…</span></div>
@@ -215,6 +232,36 @@
     $('time').dataset.stale = t('stale');
   }
   applyLang();
+
+  // Theme: Night (dark) or Day (light). ?theme=dark|light wins (fixed screens), else the viewer's
+  // saved choice, else the device's own light/dark setting (followed live).
+  const THEME_KEY = 'gold-widget-theme';
+  const lightMQ = matchMedia('(prefers-color-scheme: light)');
+  let themeChoice = null;
+  const qt = (q.get('theme') || '').toLowerCase();
+  if (qt === 'dark' || qt === 'light') themeChoice = qt;
+  else { try { const s = localStorage.getItem(THEME_KEY); if (s === 'dark' || s === 'light') themeChoice = s; } catch (e) {} }
+  const theme = () => themeChoice || (lightMQ.matches ? 'light' : 'dark');
+  function applyTheme() {
+    if (themeChoice) document.documentElement.dataset.theme = themeChoice;
+    else delete document.documentElement.dataset.theme;
+    const th = theme();
+    // Logo: gold foil on Night, ink on Day (brand guide).
+    document.querySelectorAll('img[data-logo]').forEach(img => {
+      const base = img.dataset.logo;
+      img.src = th === 'light' ? `${base}-ink.svg` : (base === 'treynoor-wordmark-ar' ? `${base}.svg` : `${base}-gold.svg`);
+    });
+    document.querySelectorAll('.tog button[data-theme-btn]').forEach(b => {
+      const on = b.dataset.themeBtn === th; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
+    });
+  }
+  applyTheme();
+  lightMQ.addEventListener('change', () => { if (!themeChoice) applyTheme(); });
+  document.querySelectorAll('.tog button[data-theme-btn]').forEach(b => b.addEventListener('click', () => {
+    themeChoice = b.dataset.themeBtn;
+    try { localStorage.setItem(THEME_KEY, themeChoice); } catch (e) {}
+    applyTheme();
+  }));
 
   // Memory copy first, so change/stale still work where browser storage is blocked.
   const mem = {};
