@@ -82,11 +82,9 @@
   if (q.get('accent')) document.documentElement.style.setProperty('--accent', q.get('accent'));
 
   const GOLD_URL = 'https://api.gold-api.com/price/XAU';      // USD per troy ounce, no key
-  const FX_URL = 'https://open.er-api.com/v6/latest/USD';      // daily USD rates, no key
   const REFRESH_MS = 5 * 60 * 1000;                            // gold: every 5 minutes
-  const FX_MAX_AGE_MS = 24 * 60 * 60 * 1000;                   // FX: once a day
-  const SAR_PEG = 3.75;                                         // used only if FX has never loaded
-  const GOLD_KEY = 'gold-widget-price-v1', FX_KEY = 'gold-widget-fx-v1';
+  const SAR_RATE = 3.76;                                        // fixed: 1 USD = 3.76 SAR
+  const GOLD_KEY = 'gold-widget-price-v1';
   const GRAMS_PER_OZ = 31.1034768;                              // troy ounce
   const BARS = [['1 g', 1], ['2.5 g', 2.5], ['5 g', 5], ['1 oz', GRAMS_PER_OZ], ['100 g', 100], ['1 kg', 1000]];
   const $ = id => document.getElementById(id);
@@ -104,32 +102,18 @@
     return r.json();
   }
 
-  // Step 2: USD -> SAR rate, refreshed at most once a day; falls back to the last rate, then the peg.
-  async function sarRate() {
-    const fx = load(FX_KEY);
-    if (fx && Date.now() - fx.at < FX_MAX_AGE_MS) return fx.rate;
-    try {
-      const d = await fetchJson(FX_URL);
-      const rate = d && d.rates && d.rates.SAR;
-      if (typeof rate !== 'number' || !(rate > 0)) throw new Error('no SAR');
-      save(FX_KEY, { rate, at: Date.now() });
-      return rate;
-    } catch (e) {
-      return fx ? fx.rate : SAR_PEG;
-    }
-  }
-
-  // Step 3: show both prices, change since the previous refresh, and time of the price.
+  // Show both prices, change since the previous refresh, and time of the price.
+  // SAR = unrounded USD x 3.76; every value is rounded to 2 decimals only when displayed.
   function render(p, stale) {
     const usd = $('usd'), sar = $('sar'), bars = $('bars');
     usd.classList.add('out'); sar.classList.add('out'); bars.classList.add('out');
     setTimeout(() => {
       usd.textContent = money(p.usd);
-      sar.textContent = money(p.usd * p.rate);
+      sar.textContent = money(p.usd * SAR_RATE);
       // Bullion table: grams x (spot / grams per ounce), in USD and SAR.
       const perGram = p.usd / GRAMS_PER_OZ;
       $('bars-body').innerHTML = BARS.map(([label, g]) =>
-        `<tr><td>${label}</td><td>${money(g * perGram)}</td><td>${money(g * perGram * p.rate)}</td></tr>`).join('');
+        `<tr><td>${label}</td><td>${money(g * perGram)}</td><td>${money(g * perGram * SAR_RATE)}</td></tr>`).join('');
       usd.classList.remove('out'); sar.classList.remove('out'); bars.classList.remove('out');
     }, 400);
     const chg = $('chg');
@@ -153,11 +137,10 @@
       // Step 1: spot gold in USD per ounce.
       const g = await fetchJson(GOLD_URL);
       if (typeof g.price !== 'number' || !(g.price > 0)) throw new Error('bad price');
-      const rate = await sarRate();
       const at = g.updatedAt ? Date.parse(g.updatedAt) : Date.now();
       // Keep the previous comparison point when the source hasn't moved to a new quote yet.
       const prev = last ? (last.at === at ? last.prev : last.usd) : null;
-      const p = { usd: g.price, rate, at, prev };
+      const p = { usd: g.price, at, prev };
       save(GOLD_KEY, p);
       render(p, false);
     } catch (e) {
