@@ -75,7 +75,7 @@
   #wk-chg.up { color: var(--up); }
   #wk-chg.down { color: var(--down); }
   #wk-hl { color: #c9d3de; font-size: .9em; }
-  .chart { position: relative; margin-top: .4em; height: calc(150px * var(--scale)); touch-action: pan-y; }
+  .chart { position: relative; margin-top: .4em; height: calc(190px * var(--scale)); touch-action: pan-y; }
   .chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
   .chart .grid { stroke: rgba(255,255,255,.08); stroke-width: 1; }
   .chart .ylab, .chart .xlab { fill: #8d9bab; font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -272,7 +272,7 @@
   const tickKey = { day: ts => dayNum(ts), week: ts => Math.floor((dayNum(ts) + 4) / 7),   // weeks start Sunday
                     month: ts => fmt(ts, { year: 'numeric', month: 'numeric' }) };
   const tickLabel = { day: ts => fmt(ts, { weekday: 'short' }), week: ts => fmt(ts, { day: 'numeric', month: 'short' }),
-                      month: ts => fmt(ts, { month: 'short' }) };
+                      month: ts => fmt(ts, { month: 'long' }) };
   const tipFmt = { '7d': { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
                    '30d': { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
                    '1y': { day: 'numeric', month: 'short', year: 'numeric' } };
@@ -326,7 +326,8 @@
     $('wk-hl').innerHTML = `${t('hi')} <bdi>${amt(conv(week.hi))}</bdi> · ${t('lo')} <bdi>${amt(conv(week.lo))}</bdi>`;
 
     const W = svg.clientWidth || 320, H = svg.clientHeight || 150;
-    const padR = 52, padB = 18, padT = 6;
+    const vertical = r.tick === 'month';                 // year view: full month names, written vertically
+    const padR = 52, padB = vertical ? 62 : 18, padT = 6;
     const vals = week.c.map(conv);
     let min = Math.min(...vals), max = Math.max(...vals);
     const span = (max - min) || max * .001; min -= span * .08; max += span * .08;
@@ -342,13 +343,15 @@
     });
     let xl = '', lastLab = -1e9;
     const key = tickKey[r.tick], label = tickLabel[r.tick];
-    const minGap = lang === 'ar' ? 40 : 30;              // skip labels that would collide
+    const minGap = vertical ? 12 : lang === 'ar' ? 40 : 30;   // skip labels that would collide
     for (let i = 1; i < n; i++) {
       if (key(week.t[i]) !== key(week.t[i - 1])) {
         const xx = x(i).toFixed(1);
         xl += `<line class="grid" x1="${xx}" x2="${xx}" y1="${padT}" y2="${base}"/>`;
-        if (x(i) - lastLab >= minGap && x(i) < W - padR - 14) {
-          xl += `<text class="xlab" x="${(x(i) + 3).toFixed(1)}" y="${H - 4}">${label(week.t[i])}</text>`;
+        if (x(i) - lastLab >= minGap && x(i) < W - padR - (vertical ? 8 : 14)) {
+          xl += vertical
+            ? `<text class="xlab" text-anchor="end" transform="translate(${(x(i) + 12).toFixed(1)} ${base + 5}) rotate(-90)">${label(week.t[i])}</text>`
+            : `<text class="xlab" x="${(x(i) + 3).toFixed(1)}" y="${H - 4}">${label(week.t[i])}</text>`;
           lastLab = x(i);
         }
       }
