@@ -5,7 +5,7 @@
 <title>Gold Price</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="treynoor-monogram-gold.svg" type="image/svg+xml">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23E4C063'/%3E%3C/svg%3E" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@400;600&family=Inter:wght@400;600&family=Outfit:wght@400;500&display=swap" rel="stylesheet">
@@ -62,18 +62,8 @@
   [dir="rtl"] #card { font-size: calc(17px * var(--scale)); }
   #card.on { opacity: 1; transform: none; }
   #card.panel { background: var(--surface-raised); border-color: var(--line); border-top-color: var(--gold-500); }
-  /* Motif: the monogram's rays and arcs, cropped off the top corner, low strength */
-  #card.panel::before { content: ""; position: absolute; top: -70px; inset-inline-end: -70px; width: 200px; height: 200px; pointer-events: none; opacity: var(--motif);
-    background: radial-gradient(circle, var(--gold-500) 0 14px, transparent 15px 34px, var(--gold-500) 35px 36px, transparent 37px 56px, var(--gold-500) 57px 58px, transparent 59px 78px, var(--gold-500) 79px 80px, transparent 81px); }
   #card > * { position: relative; }
-
-  .brand { display: flex; justify-content: center; align-items: center; gap: 10px; height: calc(30px * var(--scale)); }
-  .brand > span { display: flex; align-items: center; gap: 10px; height: 100%; }
-  .brand img { display: block; height: 100%; width: auto; }
-  .brand .ar { display: none; }
-  [dir="rtl"] .brand .en { display: none; }
-  [dir="rtl"] .brand .ar { display: flex; }
-  .brand .ar img.wm { height: 100%; }
+  /* No Treynoor branding (logo, motif) in any mode — user's choice, 2026-11-28 */
 
   .head { display: flex; justify-content: center; margin-top: 1.1em; padding-top: .9em; border-top: 1px solid var(--line); }
   .title { font-family: var(--font-display); font-size: 2em; font-weight: 500; line-height: 1.15; color: var(--gold-ink); }
@@ -88,7 +78,7 @@
   .row .val { font-family: var(--font-display); font-size: 3em; font-weight: 500; line-height: 1.1; letter-spacing: .01em; transition: opacity .4s ease; }
   .val.out { opacity: 0; }
   .tog-row { display: flex; flex-wrap: wrap; justify-content: center; gap: .5em .6em; margin-top: .8em; }
-  .tog-row.top { justify-content: space-between; margin-top: .9em; }   /* language and theme at the two edges */
+  .tog-row.top { justify-content: space-between; margin-top: 0; }   /* language and theme at the two edges, top of the card */
   #card.old #time::after { content: " • " attr(data-stale); color: var(--stale); }
   /* Trading indicator: green dot while the spot price is moving, grey once it has stood still 15 minutes */
   .mkt { display: flex; justify-content: center; align-items: center; gap: .45em; margin-top: .25em; font-size: .78em; color: var(--ink-muted); }
@@ -159,8 +149,7 @@
   .rng button:hover { color: var(--ink); }
   .rng button.on { color: var(--gold-ink); border-color: var(--gold-500); }
   html.obs .tog-row { display: none; }
-  /* Widget (OBS overlay): no Treynoor branding — no logo, no rule under it, no corner motif. Webpage only. */
-  html.obs .brand, html.obs #card.panel::before { display: none; }
+  /* OBS overlay: the switches are hidden, so the title starts the card */
   html.obs .head { margin-top: 0; padding-top: 0; border-top: 0; }
 
   /* ---- Screen sizes (webpage only; the OBS overlay keeps the fixed 380 px card and ?scale) ----
@@ -177,7 +166,7 @@
     html:not(.obs) #card { width: min(calc(600px * var(--scale)), 100%); padding: 30px 32px 24px; }
     html:not(.obs) { --chart-h: 240px; }
   }
-  /* Desktop: two columns — price and bullion on one side, chart on the other; logo row across the top */
+  /* Desktop: two columns — price and bullion on one side, chart on the other; switch row across the top */
   @media (min-width: 1024px) {
     html:not(.obs) body { padding-top: 48px; }
     html:not(.obs) #card { width: min(calc(960px * var(--scale)), 100%); padding: 32px 40px 28px; }
@@ -198,11 +187,7 @@
 </defs></svg>
 
 <div id="card">
-  <div class="brand">
-    <span class="en"><img data-logo="treynoor-logo-horizontal" src="treynoor-logo-horizontal-gold.svg" alt="Treynoor"></span>
-    <span class="ar"><img data-logo="treynoor-monogram" src="treynoor-monogram-gold.svg" alt=""><img class="wm" data-logo="treynoor-wordmark-ar" src="treynoor-wordmark-ar.svg" alt="ترينور"></span>
-  </div>
-  <!-- Under the logo: language switch at one edge, theme switch at the other -->
+  <!-- Top row: language switch at one edge, theme switch at the other -->
   <div class="tog-row top">
     <div class="tog" role="group" aria-label="Language"><button type="button" data-lang="en">EN</button><button type="button" data-lang="ar" lang="ar">ع</button></div>
     <div class="tog" role="group" aria-label="Theme"><button type="button" data-theme-btn="dark" aria-label="Dark">☾</button><button type="button" data-theme-btn="light" aria-label="Light">☀</button></div>
@@ -331,11 +316,6 @@
     if (themeChoice) document.documentElement.dataset.theme = themeChoice;
     else delete document.documentElement.dataset.theme;
     const th = theme();
-    // Logo: gold foil on Night, ink on Day (brand guide).
-    document.querySelectorAll('img[data-logo]').forEach(img => {
-      const base = img.dataset.logo;
-      img.src = th === 'light' ? `${base}-ink.svg` : (base === 'treynoor-wordmark-ar' ? `${base}.svg` : `${base}-gold.svg`);
-    });
     document.querySelectorAll('.tog button[data-theme-btn]').forEach(b => {
       const on = b.dataset.themeBtn === th; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
     });
