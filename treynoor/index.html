@@ -357,7 +357,14 @@
     const s = load(tradeKey(m));
     if (!fresh[m] || !s) return null;
     if (s.seen - s.since >= STILL_MS) return 'closed';
-    return s.moved ? 'open' : null;
+    if (s.moved) return 'open';
+    // Nothing seen here yet (e.g. first visit): the hourly record (history.json) can already tell. If its last
+    // entry is this same price and the record was written again at least an hour later without a new entry,
+    // the price has stood still for over an hour, so the market is not trading.
+    const src = hist && (m === 'gold' ? hist : hist.silver), r = src && src.spotHourly;
+    if (r && r.p && r.p.length && cents(r.p[r.p.length - 1]) === cents(s.usd)
+        && Date.parse(hist.generatedAt) - r.t[r.t.length - 1] >= 50 * 60 * 1000) return 'closed';
+    return null;
   }
   // When the price last changed: seen here, else when the hourly record (history.json) first had this price.
   function lastTradeAt(m) {
