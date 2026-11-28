@@ -90,6 +90,13 @@
   .tog-row { display: flex; flex-wrap: wrap; justify-content: center; gap: .5em .6em; margin-top: .8em; }
   .tog-row.top { justify-content: space-between; margin-top: .9em; }   /* language and theme at the two edges */
   #card.old #time::after { content: " • " attr(data-stale); color: var(--stale); }
+  /* Trading indicator: green dot while the spot price is moving, grey once it has stood still 15 minutes */
+  .mkt { display: flex; justify-content: center; align-items: center; gap: .45em; margin-top: .25em; font-size: .78em; color: var(--ink-muted); }
+  .mkt[hidden] { display: none; }
+  .mkt i { width: .6em; height: .6em; border-radius: 50%; background: var(--ink-muted); opacity: .7; }
+  .mkt.open i { background: var(--arrow-up); opacity: 1; animation: mkt-pulse 2.4s ease-in-out infinite; }
+  @keyframes mkt-pulse { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .mkt.open i { animation: none; } }
   .chart { direction: ltr; }
   .wk-stats { flex-wrap: wrap; gap: .15em .8em; }
   .wk-stats > span { white-space: nowrap; }
@@ -205,6 +212,7 @@
     <div class="tog" role="group" aria-label="Currency"><button type="button" data-cur="USD">USD</button><button type="button" data-cur="SAR">SAR</button></div>
   </div>
   <div class="row"><span class="val" id="price">--</span></div>
+  <div class="mkt" id="mkt" hidden role="status"><i aria-hidden="true"></i><span id="mkt-txt"></span></div>
   <div class="foot"><span id="chg" dir="ltr">—</span><span id="time" data-i18n="loading">Loading…</span></div>
   <table class="bars" id="bars">
     <caption><span data-i18n="bullion">Bullion</span><small data-i18n="bullionNote">24K spot value, no premium</small></caption>
@@ -271,6 +279,7 @@
           USD: 'USD', SAR: 'SAR', hi: 'H', lo: 'L', stale: 'stale', noPrice: 'Price unavailable', noChart: 'Chart unavailable',
           sizes: ['1 g', '1 oz (31.10 g)', '1 kg'], locale: 'en-GB',
           mGold: 'Gold', mSilver: 'Silver', doc: 'Gold Price', chartLabel: 'Gold price chart',
+          trading: 'Trading', notTrading: 'Not trading', lastTrade: 'Last trade',
           // silver versions of the metal-specific texts (key + '_silver')
           title_silver: 'Silver', unit_silver: 'Spot price · per troy ounce · 999 fine', bullionNote_silver: '999 fine · spot value, no premium',
           doc_silver: 'Silver Price', chartLabel_silver: 'Silver price chart',
@@ -281,6 +290,7 @@
           USD: 'دولار', SAR: 'ريال', hi: 'أعلى', lo: 'أدنى', stale: 'غير محدّث', noPrice: 'السعر غير متاح', noChart: 'الرسم غير متاح',
           sizes: ['1 غرام', '1 أونصة (31.10 غرام)', '1 كيلو'], locale: 'ar-u-nu-latn-ca-gregory',
           mGold: 'ذهب', mSilver: 'فضة', doc: 'سعر الذهب', chartLabel: 'رسم سعر الذهب',
+          trading: 'يتم التداول', notTrading: 'لا يوجد تداول', lastTrade: 'آخر تداول',
           title_silver: 'الفضة', unit_silver: 'السعر الفوري · للأونصة · نقاوة 999', bullionNote_silver: 'نقاوة 999 · قيمة فورية، بدون رسوم',
           doc_silver: 'سعر الفضة', chartLabel_silver: 'رسم سعر الفضة',
           sizes_silver: ['1 أونصة (31.10 غرام)', '10 أونصات (311.03 غرام)', '1 كيلو', '100 أونصة (3.11 كيلو)'] },
@@ -345,6 +355,50 @@
   const amt = n => `<bdi dir="ltr" class="amt">${cur === 'SAR' ? RIYAL : '<span class="ds">$</span>'}${money(n)}</bdi>`;
   const clock = ts => new Date(ts).toLocaleString(t('locale'), { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' });
 
+  // ---- Trading indicator, judged from the spot price itself ----
+  // Moving price = trading (green dot). Same price for 15 minutes = not trading (grey dot), shown with the
+  // time of the last trade. Until there is evidence either way no dot is shown and the price is checked every minute.
+  const STILL_MS = 15 * 60 * 1000, QUICK_MS = 60 * 1000;
+  const tradeKey = m => 'gold-widget-trade-v1-' + m;
+  const cents = v => Math.round(v * 100);
+  const fresh = {};                                             // metal -> last price fetch succeeded
+  // since = when this exact price was first seen, seen = last successful fetch,
+  // moved = the price changed since a fetch less than 15 minutes earlier (proof that trading is live).
+  function notePrice(m, usd, now) {
+    const s = load(tradeKey(m));
+    if (s && cents(s.usd) === cents(usd)) save(tradeKey(m), Object.assign({}, s, { seen: now }));
+    else save(tradeKey(m), { usd, since: now, seen: now, moved: !!s && now - s.seen <= STILL_MS });
+  }
+  // 'open', 'closed', or null while not known yet.
+  function tradeState(m) {
+    const s = load(tradeKey(m));
+    if (!fresh[m] || !s) return null;
+    if (s.seen - s.since >= STILL_MS) return 'closed';
+    return s.moved ? 'open' : null;
+  }
+  // When the price last changed: seen here, else when the hourly record (history.json) first had this price.
+  function lastTradeAt(m) {
+    const s = load(tradeKey(m));
+    if (!s) return null;
+    if (s.moved) return s.since;
+    const src = hist && (m === 'gold' ? hist : hist.silver), r = src && src.spotHourly;
+    if (r && r.p && r.p.length && cents(r.p[r.p.length - 1]) === cents(s.usd)) return r.t[r.t.length - 1];
+    return null;
+  }
+  function showMarket() {
+    const st = tradeState(metal), el = $('mkt');
+    el.hidden = !st;
+    el.className = 'mkt' + (st ? ' ' + st : '');
+    $('mkt-txt').textContent = st === 'open' ? t('trading') : st === 'closed' ? t('notTrading') : '';
+    if (st === 'closed' && lastShown) {
+      // Not trading: no change arrow; the foot shows when the last trade was.
+      const at = lastTradeAt(metal);
+      $('chg').className = '';
+      $('chg').textContent = t('lastTrade');
+      $('time').textContent = at ? clock(at) : '—';
+    }
+  }
+
   async function fetchJson(url) {
     const r = await fetch(url, { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
@@ -380,13 +434,14 @@
     $('time').dataset.filled = '1';
     $('card').classList.toggle('old', !!stale);
     $('card').classList.add('on');
+    showMarket();
   }
 
   // Both metals are fetched every time, so switching is instant; only the shown metal is drawn.
   const shown = {};                                             // metal -> [price, stale]
   function showPrice() {
     if (shown[metal]) render(...shown[metal]);
-    else { lastShown = null; $('price').textContent = '--'; $('bars-body').innerHTML = ''; $('chg').textContent = '—'; $('time').textContent = t('noPrice'); }
+    else { lastShown = null; $('price').textContent = '--'; $('bars-body').innerHTML = ''; $('chg').textContent = '—'; $('time').textContent = t('noPrice'); showMarket(); }
   }
   async function updateMetal(m) {
     const M = METALS[m], last = load(M.key);
@@ -400,15 +455,24 @@
       const p = { usd: g.price, at, prev };
       save(M.key, p);
       shown[m] = [p, false];
+      notePrice(m, g.price, Date.now());
+      fresh[m] = true;
     } catch (e) {
       // Step 4: keep the last known price on screen and mark it stale.
       if (last) shown[m] = [last, true];
+      fresh[m] = false;
     }
   }
-  async function update() {
+  // quick = the one-minute check while the trading state is not known yet: redraw only if the price moved.
+  let quickT;
+  async function update(quick) {
+    const before = shown[metal] && shown[metal][0].usd;
     await Promise.all(Object.keys(METALS).map(updateMetal));
-    showPrice();
+    if (quick === true && shown[metal] && !shown[metal][1] && shown[metal][0].usd === before) showMarket();
+    else showPrice();
     $('card').classList.add('on');
+    clearTimeout(quickT);
+    if (Object.keys(METALS).some(m => fresh[m] && !tradeState(m))) quickT = setTimeout(() => update(true), QUICK_MS);
   }
 
   // ---- History chart: spot prices from history.json (PAXG candles from Binance as fallback), rotating 7 days -> 30 days -> 1 year ----
@@ -497,6 +561,7 @@
     await loadHistory();
     await Promise.all(Object.keys(METALS).flatMap(m => RANGES.map(r => loadRange(m, r, force))));
     drawChart();
+    showMarket();                                               // history.json can supply the last-trade time
   }
 
   // Range indicator: 7D · 30D · 1Y (tap to jump).

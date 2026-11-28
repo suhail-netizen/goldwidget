@@ -1,6 +1,7 @@
 """Gold and silver history for the Treynoor price widget (spot prices).
 
-Two modes, both run by GitHub Actions (.github/workflows/history.yml):
+Run every hour by scripts/collect.sh inside the GitHub job (.github/workflows/history.yml), in daily mode.
+Two modes:
 
   hourly  - record the current spot price (gold-api.com /price, free, no key) into `spotHourly`,
             then rebuild the 7-day and 30-day charts.
