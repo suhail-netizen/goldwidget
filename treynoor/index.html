@@ -159,6 +159,9 @@
   .rng button:hover { color: var(--ink); }
   .rng button.on { color: var(--gold-ink); border-color: var(--gold-500); }
   html.obs .tog-row { display: none; }
+  /* Widget (OBS overlay): no Treynoor branding — no logo, no rule under it, no corner motif. Webpage only. */
+  html.obs .brand, html.obs #card.panel::before { display: none; }
+  html.obs .head { margin-top: 0; padding-top: 0; border-top: 0; }
 
   /* ---- Screen sizes (webpage only; the OBS overlay keeps the fixed 380 px card and ?scale) ----
      Text grows smoothly with the screen width: about 15px on phones, 16px at 600px, 18px from 1024px. */
